@@ -1,0 +1,3 @@
+-Post processing (generacja entropii)
+-Ponowna implementacja warunków brzegowych (i usunięcie dawania ich w dyskretyzacji)
+-Zaimplementować równania chemiczne

@@ -1,15 +1,15 @@
 offset_R = 1e-30;
-delta_R = 0.1;
-L = 0.1;
+delta_R = 0.05;
+L = 0.3;
 
-sz = [20 20];
+sz = [90 15];
 
 dx = L * ones(sz(1),1) / sz(1);
 dr = delta_R * ones(1,sz(2)) / sz(2);
 
 grid = Grid2D(dx, dr, offset_R);
 
-flow = FlowComponent(grid, zeros(sz), zeros(sz), zeros(sz), 1, @(x) ones(sz), @(x) ones(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-7, 1e-7, 0.7, 0.15, 1, 1, 70);
+flow = FlowComponent(grid, zeros(sz), zeros(sz), zeros(sz), 1, @(x) ones(sz), @(x) ones(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-7, 1e-7, 0.7, 0.25, 1, 1, 70);
 
 % Boundary conditions
 % West

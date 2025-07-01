@@ -1,4 +1,4 @@
-function [vx_faces, vr_faces] = rhie_chow_interpolation(grid, vx, vr, p, vx_bds, vr_bds, p_bds, aP_vx, aP_vr, flow)
+function [vx_faces, vr_faces] = rhie_chow_interpolation(grid, vx, vr, p, vx_bds, vr_bds, p_bds, aP_vx, aP_vr)
     arguments
         grid Grid2D
         vx (:,:) double
@@ -9,24 +9,8 @@ function [vx_faces, vr_faces] = rhie_chow_interpolation(grid, vx, vr, p, vx_bds,
         p_bds (1,1) Boundaries
         aP_vx (:,:) double
         aP_vr (:,:) double
-        flow (1,1) FlowComponent
     end
     %% Calculating the rhie chow correction
-
-    %%%%%%%%%%%%%%%%%%
-    % Volume of the r-staggered cells
-            lower_face_r = [grid.face_pos_r(1,1) grid.cent_pos_r];
-            upper_face_r = [grid.cent_pos_r grid.face_pos_r(1,end)];
-
-            staggered_center_r = (lower_face_r + upper_face_r) / 2;
-
-            volume_r = 2 * pi .* grid.dx .* (upper_face_r - lower_face_r) .* staggered_center_r;
-
-            % Removing the geometric term
-            geom_term = 2 * pi * grid.dx .* log(grid.face_pos_r(1,2:end) ./ grid.face_pos_r(1,1:end-1)) .* flow.visc / flow.porosity;
-            geom_term(:,1) = 4 * pi * grid.dx .* flow.visc(:,1) / flow.porosity;
-            aP_vr = aP_vr - geom_term;
-    %%%%%%%%%%%%%%%%%%
 
     % Calculating the Df
     DP_x = grid.volume ./ aP_vx;
@@ -40,19 +24,11 @@ function [vx_faces, vr_faces] = rhie_chow_interpolation(grid, vx, vr, p, vx_bds,
     [Df_x, ~] = evaluate_faces(coeffs_x, coeffs_r, DP_x);
     [~, Df_r] = evaluate_faces(coeffs_x, coeffs_r, DP_r);
 
-    %%%%%%%%%%%%%%%%
-    % Adding the geometric term for the staggered r cell
-            [~, visc_r] = evaluate_faces(coeffs_x, coeffs_r, flow.visc);
-            geom_term = 2 * pi * grid.dx .* log(upper_face_r ./ lower_face_r) .* visc_r / flow.porosity;
-            geom_term(:,1) = 4 * pi * grid.dx .* visc_r(:,1) / flow.porosity;
-            Df_r = Df_r .* volume_r ./ (volume_r + Df_r .* geom_term);
-    %%%%%%%%%%%%%%%%
-
     clear DP_x DP_r;
 
     % Calculating the normal pressure derivatives at faces
     % Obtaining the coefficients
-    [coeffs_x_p_der, coeffs_r_p_der] = green_gauss_like_scheme(grid, p_bds);
+    [coeffs_x_p_der, coeffs_r_p_der] = central_differencing_scheme(grid, p_bds);
     % Calculating the derivatives
     [p_der_x, p_der_r] = evaluate_faces(coeffs_x_p_der, coeffs_r_p_der, p);
     clear coeffs_x_p_der coeffs_r_p_der;
@@ -64,8 +40,8 @@ function [vx_faces, vr_faces] = rhie_chow_interpolation(grid, vx, vr, p, vx_bds,
     [p_x, p_r] = evaluate_faces(coeffs_x_p_val, coeffs_r_p_val, p);
     clear coeffs_x_p_val coeffs_r_p_val;
     % Calculating the derivatives at cell centers
-    p_der_center_x = (grid.face_area_x(2:end,:) .* p_x(2:end,:) - grid.face_area_x(1:end-1,:) .* p_x(1:end-1,:)) ./ grid.volume;
-    p_der_center_r = (grid.face_area_r(:,2:end) .* p_r(:,2:end) - grid.face_area_r(:,1:end-1) .* p_r(:,1:end-1)) ./ grid.volume;
+    p_der_center_x = (p_x(2:end,:) - p_x(1:end-1,:)) ./ grid.dx;
+    p_der_center_r = (p_r(:,2:end) - p_r(:,1:end-1)) ./ grid.dr;
     clear p_x p_r;
     % Calculating the interpolated derivatives
     [p_der_x_int, ~] = evaluate_faces(coeffs_x, coeffs_r, p_der_center_x);

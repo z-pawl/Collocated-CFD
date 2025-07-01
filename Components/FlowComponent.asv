@@ -219,12 +219,12 @@ classdef FlowComponent < IComponent
             % Pressure values at faces
             [px, pr] = evaluate_faces(coeff_px, coeff_pr, obj.p);
             % Adding the volume integral of pressure gradient as source terms
-            coeff_vx(:,:,6) = coeff_vx(:,:,6) + obj.grid.volume ./ obj.grid.dx .* (px(1:end-1,:) - px(2:end,:));
-            coeff_vr(:,:,6) = coeff_vr(:,:,6) + obj.grid.volume ./ obj.grid.dr .* (pr(:,1:end-1) - pr(:,2:end));
+            coeff_vx(:,:,6) = coeff_vx(:,:,6) + obj.grid.volume .* (px(1:end-1,:) - px(2:end,:)) ./ obj.dx;
+            coeff_vr(:,:,6) = coeff_vr(:,:,6) + obj.grid.volume .* (pr(:,1:end-1) - pr(:,2:end)) ./ obj.dr;
 
             % Adding slight implicit relaxation to ensure the diagonal dominance
-            coeff_vx = implicit_relaxation(coeff_vx, obj.vx, 0.999);
-            coeff_vr = implicit_relaxation(coeff_vr, obj.vr, 0.999);
+            coeff_vx = implicit_relaxation(coeff_vx, obj.vx, 0.98);
+            coeff_vr = implicit_relaxation(coeff_vr, obj.vr, 0.98);
         end
 
         function coeff_vx = get_coefficients_vx(obj, Fx, Fr, Dx, Dr)
@@ -354,9 +354,10 @@ classdef FlowComponent < IComponent
                 [coeff_px, coeff_pr] = linear_interpolation_scheme(obj.grid, obj.p_corr_bds);
                 % Pressure correction values at faces
                 [p_corr_x, p_corr_r] = evaluate_faces(coeff_px, coeff_pr, p_corr);
+
                 % Adding the volume integral of pressure gradient as source terms
-                p_force_x = obj.grid.volume ./ obj.grid.dx .* (p_corr_x(1:end-1,:) - p_corr_x(2:end,:));
-                p_force_r = obj.grid.volume ./ obj.grid.dr .* (p_corr_r(:,1:end-1) - p_corr_r(:,2:end));
+                p_force_x = obj.grid.volume .* (p_corr_x(1:end-1,:) - px(2:end,:)) ./ obj.dx;
+                p_force_r = p_corr_r(:,1:end-1) - p_corr_r(:,2:end);
 
                 vx_star = vx_star + p_force_x ./ coeff_vx(:,:,1) * obj.relaxation_factor_v;
                 vr_star = vr_star + p_force_r ./ coeff_vr(:,:,1) * obj.relaxation_factor_v;
