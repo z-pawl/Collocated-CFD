@@ -1,4 +1,4 @@
-function [coeffs_x, coeffs_r] = TVD_scheme(grid, vel_x_faces, vel_r_faces, flux_limiter, field_face_derivatives_x, field_face_derivatives_r, field_bd_conditions)
+function [coeffs_x, coeffs_r] = TVD_scheme(grid, vel_x_faces, vel_r_faces, flux_limiter, field_face_derivatives_x, field_face_derivatives_r)
     arguments
         grid (1,1) Grid2D
         vel_x_faces (:,:) double
@@ -6,7 +6,6 @@ function [coeffs_x, coeffs_r] = TVD_scheme(grid, vel_x_faces, vel_r_faces, flux_
         flux_limiter (1,1) function_handle
         field_face_derivatives_x (:,:) double 
         field_face_derivatives_r (:,:) double
-        field_bd_conditions (1,1) Boundaries
     end
     sz = grid.sz;
 
@@ -44,6 +43,4 @@ function [coeffs_x, coeffs_r] = TVD_scheme(grid, vel_x_faces, vel_r_faces, flux_
             end
         end
     end
-
-    [coeffs_x, coeffs_r] = field_bd_conditions.apply_boundary_condition_value(coeffs_x, coeffs_r);
 end

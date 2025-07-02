@@ -111,10 +111,10 @@ classdef FlowComponent < IComponent
             obj.srcr_function = srcr_function;
             obj.src_linr_function = src_linr_function;
 
-            obj.vx_bds = Boundaries(grid);
-            obj.vr_bds = Boundaries(grid);
-            obj.p_bds = Boundaries(grid);
-            obj.p_corr_bds = Boundaries(grid);
+            obj.vx_bds = Boundaries;
+            obj.vr_bds = Boundaries;
+            obj.p_bds = Boundaries;
+            obj.p_corr_bds = Boundaries;
 
             obj.tol_v = tol_v;
             obj.tol_p = tol_p;
@@ -170,22 +170,17 @@ classdef FlowComponent < IComponent
 
         % Converts pressure boundary conditions to pressure correction boundary conditions
         function convert_pressure_bd_conditions(obj)
-            obj.p_corr_bds.boundary_conditions_x.is_bd = obj.p_bds.boundary_conditions_x.is_bd;
-            obj.p_corr_bds.boundary_conditions_x.orientation = obj.p_bds.boundary_conditions_x.orientation;
-            obj.p_corr_bds.boundary_conditions_x.a = obj.p_bds.boundary_conditions_x.a;
-            obj.p_corr_bds.boundary_conditions_x.b = obj.p_bds.boundary_conditions_x.b;
-            obj.p_corr_bds.boundary_conditions_x.c = zeros(obj.grid.sz + [1 0]);
+            obj.p_corr_bds = Boundaries;
 
-            obj.p_corr_bds.boundary_conditions_r.is_bd = obj.p_bds.boundary_conditions_r.is_bd;
-            obj.p_corr_bds.boundary_conditions_r.orientation = obj.p_bds.boundary_conditions_r.orientation;
-            obj.p_corr_bds.boundary_conditions_r.a = obj.p_bds.boundary_conditions_r.a;
-            obj.p_corr_bds.boundary_conditions_r.b = obj.p_bds.boundary_conditions_r.b;
-            obj.p_corr_bds.boundary_conditions_r.c = zeros(obj.grid.sz + [0 1]);
+            for i = 1:size(obj.p_bds.boundaries,1)
+                obj.p_corr_bds.add_boundary(obj.p_bds.boundaries(i).convert_into_correction_boundary())
+            end
         end
 
         function [coeff_vx, coeff_vr] = get_coefficients_v(obj)
             % Coefficients used to calculate the physical properties at faces
-            [lin_int_coeffs_x, lin_int_coeffs_r] = linear_interpolation_scheme(obj.grid, obj.grid.domain_boundary);
+            [lin_int_coeffs_x, lin_int_coeffs_r] = linear_interpolation_scheme(obj.grid);
+            [lin_int_coeffs_x, lin_int_coeffs_r] = obj.grid.domain_boundary.apply_boundary_condition_value(lin_int_coeffs_x, lin_int_coeffs_r);
             
             % Properties interpolated to faces
             % Density
@@ -215,7 +210,8 @@ classdef FlowComponent < IComponent
             % Calculating the volume integral of pressure gradient
 
             % Coefficients for pressure interpolation
-            [coeff_px, coeff_pr] = linear_interpolation_scheme(obj.grid, obj.p_bds);
+            [coeff_px, coeff_pr] = linear_interpolation_scheme(obj.grid);
+            [coeff_px, coeff_pr] = obj.p_bds.apply_boundary_condition_value(coeff_px, coeff_pr);
             % Pressure values at faces
             [px, pr] = evaluate_faces(coeff_px, coeff_pr, obj.p);
             % Adding the volume integral of pressure gradient as source terms
@@ -231,19 +227,21 @@ classdef FlowComponent < IComponent
             % Values and normal derivatives of velocity at faces
 
             % Coefficients for normal derivatives
-            [coeffs_x_n_der_vx, coeffs_r_n_der_vx] = central_differencing_scheme(obj.grid, obj.vx_bds);
+            [coeffs_x_n_der_vx, coeffs_r_n_der_vx] = central_differencing_scheme(obj.grid);
+            [coeffs_x_n_der_vx, coeffs_r_n_der_vx] = obj.vx_bds.apply_boundary_condition_normal_derivative(coeffs_x_n_der_vx, coeffs_r_n_der_vx);
 
             % Values of normal derivatives
             [n_der_vx_x, n_der_vx_r] = evaluate_faces(coeffs_x_n_der_vx, coeffs_r_n_der_vx, obj.vx);
 
             % Coefficients for the upwind scheme
-            [coeffs_x_upwind, coeffs_r_upwind] = upwind_scheme(obj.grid, obj.vx_faces, obj.vr_faces, obj.vx_bds);
+            [coeffs_x_upwind, coeffs_r_upwind] = upwind_scheme(obj.grid, obj.vx_faces, obj.vr_faces);
 
             % Coefficients for the TVD scheme
-            [coeffs_x_TVD, coeffs_r_TVD] = TVD_scheme(obj.grid, obj.vx_faces, obj.vr_faces, @van_leer_flux_limiter, n_der_vx_x, n_der_vx_r, obj.vx_bds);
+            [coeffs_x_TVD, coeffs_r_TVD] = TVD_scheme(obj.grid, obj.vx_faces, obj.vr_faces, @van_leer_flux_limiter, n_der_vx_x, n_der_vx_r);
 
             % Coefficeints for the deferred scheme
             [coeffs_x_vx_deferred, coeffs_r_vx_deferred] = deferred_correction_face(coeffs_x_upwind, coeffs_r_upwind, coeffs_x_TVD, coeffs_r_TVD, obj.vx);
+            [coeffs_x_vx_deferred, coeffs_r_vx_deferred] = obj.vx_bds.apply_boundary_condition_value(coeffs_x_vx_deferred, coeffs_r_vx_deferred);
 
             clear n_der_vx_x n_der_vx_r coeffs_x_upwind coeffs_r_upwind coeffs_x_TVD coeffs_r_TVD;
 
@@ -255,19 +253,21 @@ classdef FlowComponent < IComponent
             % Values and normal derivatives of velocity at faces
 
             % Coefficients for normal derivatives
-            [coeffs_x_n_der_vr, coeffs_r_n_der_vr] = central_differencing_scheme(obj.grid, obj.vr_bds);
+            [coeffs_x_n_der_vr, coeffs_r_n_der_vr] = central_differencing_scheme(obj.grid);
+            [coeffs_x_n_der_vr, coeffs_r_n_der_vr] = obj.vr_bds.apply_boundary_condition_normal_derivative(coeffs_x_n_der_vr, coeffs_r_n_der_vr);
 
             % Values of normal derivatives
             [n_der_vr_x, n_der_vr_r] = evaluate_faces(coeffs_x_n_der_vr, coeffs_r_n_der_vr, obj.vr);
 
             % Coefficients for the upwind scheme
-            [coeffs_x_upwind, coeffs_r_upwind] = upwind_scheme(obj.grid, obj.vx_faces, obj.vr_faces, obj.vr_bds);
+            [coeffs_x_upwind, coeffs_r_upwind] = upwind_scheme(obj.grid, obj.vx_faces, obj.vr_faces);
 
             % Coefficients for the TVD scheme
-            [coeffs_x_TVD, coeffs_r_TVD] = TVD_scheme(obj.grid, obj.vx_faces, obj.vr_faces, @van_leer_flux_limiter, n_der_vr_x, n_der_vr_r, obj.vr_bds);
+            [coeffs_x_TVD, coeffs_r_TVD] = TVD_scheme(obj.grid, obj.vx_faces, obj.vr_faces, @van_leer_flux_limiter, n_der_vr_x, n_der_vr_r);
 
             % Coefficeints for the deferred scheme
             [coeffs_x_vr_deferred, coeffs_r_vr_deferred] = deferred_correction_face(coeffs_x_upwind, coeffs_r_upwind, coeffs_x_TVD, coeffs_r_TVD, obj.vr);
+            [coeffs_x_vr_deferred, coeffs_r_vr_deferred] = obj.vr_bds.apply_boundary_condition_value(coeffs_x_vr_deferred, coeffs_r_vr_deferred);
 
             clear n_der_vr_x n_der_vr_r coeffs_x_upwind coeffs_r_upwind coeffs_x_TVD coeffs_r_TVD;
 
@@ -286,7 +286,8 @@ classdef FlowComponent < IComponent
 
         function coeff_p_corr = get_coefficients_p_corr(obj, coeff_vx_aP, coeff_vr_aP)
             % Coefficients used to calculate the linear interpolation
-            [lin_int_coeffs_x, lin_int_coeffs_r] = linear_interpolation_scheme(obj.grid, obj.grid.domain_boundary);
+            [lin_int_coeffs_x, lin_int_coeffs_r] = linear_interpolation_scheme(obj.grid);
+            [lin_int_coeffs_x, lin_int_coeffs_r] = obj.grid.domain_boundary.apply_boundary_condition_value(lin_int_coeffs_x, lin_int_coeffs_r);
 
             % Interpolated quantities
             % Density
@@ -305,7 +306,8 @@ classdef FlowComponent < IComponent
             clear rho_x rho_r coeff_vx_aP_f coeff_vr_aP_f Df_x Df_r
 
             % Calculating coefficients for normal derivatives at faces for pressure
-            [coeff_der_p_x, coeff_der_p_r] = central_differencing_scheme(obj.grid, obj.p_corr_bds);
+            [coeff_der_p_x, coeff_der_p_r] = central_differencing_scheme(obj.grid);
+            [coeff_der_p_x, coeff_der_p_r] = obj.p_corr_bds.apply_boundary_condition_normal_derivative(coeff_der_p_x, coeff_der_p_r);
 
 
             % Preallocating the array
@@ -351,7 +353,8 @@ classdef FlowComponent < IComponent
 
                 % Calculating the pressure force from the pressure correction and using it to correct the velocities
                 % Coefficients for pressure interpolation
-                [coeff_px, coeff_pr] = linear_interpolation_scheme(obj.grid, obj.p_corr_bds);
+                [coeff_px, coeff_pr] = linear_interpolation_scheme(obj.grid);
+                [coeff_px, coeff_pr] = obj.p_corr_bds.apply_boundary_condition_value(coeff_px, coeff_pr);
                 % Pressure correction values at faces
                 [p_corr_x, p_corr_r] = evaluate_faces(coeff_px, coeff_pr, p_corr);
                 % Adding the volume integral of pressure gradient as source terms

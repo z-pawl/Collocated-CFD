@@ -18,7 +18,8 @@ function [vx_faces, vr_faces] = rhie_chow_interpolation(grid, vx, vr, p, vx_bds,
 
     % Calculating the coefficient for linear interpolation of DP and the
     % pressure gradients
-    [coeffs_x, coeffs_r] = linear_interpolation_scheme(grid, grid.domain_boundary);
+    [coeffs_x, coeffs_r] = linear_interpolation_scheme(grid);
+    [coeffs_x, coeffs_r] = grid.domain_boundary.apply_boundary_condition_value(coeffs_x, coeffs_r);
 
     % Interpolating the Df
     [Df_x, ~] = evaluate_faces(coeffs_x, coeffs_r, DP_x);
@@ -28,14 +29,16 @@ function [vx_faces, vr_faces] = rhie_chow_interpolation(grid, vx, vr, p, vx_bds,
 
     % Calculating the normal pressure derivatives at faces
     % Obtaining the coefficients
-    [coeffs_x_p_der, coeffs_r_p_der] = central_differencing_scheme(grid, p_bds);
+    [coeffs_x_p_der, coeffs_r_p_der] = central_differencing_scheme(grid);
+    [coeffs_x_p_der, coeffs_r_p_der] = p_bds.apply_boundary_condition_normal_derivative(coeffs_x_p_der, coeffs_r_p_der);
     % Calculating the derivatives
     [p_der_x, p_der_r] = evaluate_faces(coeffs_x_p_der, coeffs_r_p_der, p);
     clear coeffs_x_p_der coeffs_r_p_der;
 
     % Calculating the interpolated pressure derivatives at faces
     % Obtaining the coefficients for calculating pressure values at faces
-    [coeffs_x_p_val, coeffs_r_p_val] = linear_interpolation_scheme(grid, p_bds);
+    [coeffs_x_p_val, coeffs_r_p_val] = linear_interpolation_scheme(grid);
+    [coeffs_x_p_val, coeffs_r_p_val] = p_bds.apply_boundary_condition_value(coeffs_x_p_val, coeffs_r_p_val);
     % Calculating the values
     [p_x, p_r] = evaluate_faces(coeffs_x_p_val, coeffs_r_p_val, p);
     clear coeffs_x_p_val coeffs_r_p_val;
@@ -56,8 +59,7 @@ function [vx_faces, vr_faces] = rhie_chow_interpolation(grid, vx, vr, p, vx_bds,
 
     %% Obtaining the interpolation
     % Calculating the coefficient for linear interpolation of velocities
-    [coeffs_x, ~] = linear_interpolation_scheme(grid, vx_bds);
-    [~, coeffs_r] = linear_interpolation_scheme(grid, vr_bds);
+    [coeffs_x, coeffs_r] = linear_interpolation_scheme(grid);
 
     % Applying the correction
     coeffs_x(:,:,3) = coeffs_x(:,:,3) + correction_x;

@@ -1,9 +1,8 @@
-function [coeffs_x, coeffs_r] = upwind_scheme(grid, vel_x_faces, vel_r_faces, field_bd_conditions)
+function [coeffs_x, coeffs_r] = upwind_scheme(grid, vel_x_faces, vel_r_faces)
     arguments
         grid (1,1) Grid2D
         vel_x_faces (:,:) double
         vel_r_faces (:,:) double
-        field_bd_conditions (1,1) Boundaries
     end
     sz = grid.sz;
 
@@ -15,6 +14,4 @@ function [coeffs_x, coeffs_r] = upwind_scheme(grid, vel_x_faces, vel_r_faces, fi
 
     coeffs_r(:,:,1) = double(vel_r_faces >= 0);
     coeffs_r(:,:,2) = double(vel_r_faces < 0);
-
-    [coeffs_x, coeffs_r] = field_bd_conditions.apply_boundary_condition_value(coeffs_x, coeffs_r);
 end

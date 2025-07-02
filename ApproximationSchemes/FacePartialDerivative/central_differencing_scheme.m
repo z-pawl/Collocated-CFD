@@ -1,9 +1,8 @@
 % Function returning coefficients used to compute normal derivatives at
 % cell faces.
-function [coeffs_x, coeffs_r] = central_differencing_scheme(grid, field_bd_conditions)
+function [coeffs_x, coeffs_r] = central_differencing_scheme(grid)
     arguments
         grid (1,1) Grid2D
-        field_bd_conditions (1,1) Boundaries
     end
     sz = grid.sz;
 
@@ -21,7 +20,4 @@ function [coeffs_x, coeffs_r] = central_differencing_scheme(grid, field_bd_condi
 
     coeffs_r(:,:,1) = -center_inv_distance_r;
     coeffs_r(:,:,2) = center_inv_distance_r;
-
-    % Applying the boundary conditions
-    [coeffs_x, coeffs_r] = field_bd_conditions.apply_boundary_condition_normal_derivative(coeffs_x, coeffs_r);
 end

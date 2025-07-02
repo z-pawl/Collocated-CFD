@@ -49,7 +49,7 @@ classdef Grid2D < handle
 
             obj.volume = 2 * pi .* dx .* dr .* obj.cent_pos_r;
 
-            obj.domain_boundary = Boundaries(obj);
+            obj.domain_boundary = Boundaries;
         end
     end
 end

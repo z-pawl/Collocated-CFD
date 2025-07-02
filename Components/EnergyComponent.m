@@ -69,7 +69,7 @@ classdef EnergyComponent < IComponent
             obj.q_function = q_function;
             obj.qt_function = qt_function;
 
-            obj.temp_bds = Boundaries(grid);
+            obj.temp_bds = Boundaries;
 
             obj.tol = tol;
             obj.relaxation_factor = relaxation_factor;
@@ -87,7 +87,8 @@ classdef EnergyComponent < IComponent
 
         function coeff = get_coefficients(obj)
             % Coefficients used to calculate the physical properties at faces
-            [lin_int_coeffs_x, lin_int_coeffs_r] = linear_interpolation_scheme(obj.grid, obj.grid.domain_boundary);
+            [lin_int_coeffs_x, lin_int_coeffs_r] = linear_interpolation_scheme(obj.grid);
+            [lin_int_coeffs_x, lin_int_coeffs_r] = obj.grid.domain_boundary.apply_boundary_condition_value(lin_int_coeffs_x, lin_int_coeffs_r);
             
             % Properties interpolated to faces
             % Density
@@ -103,20 +104,21 @@ classdef EnergyComponent < IComponent
 
             % Values and normal derivatives of temperature at faces
             % Coefficients for normal derivatives
-            [coeffs_x_n_der_temp, coeffs_r_n_der_temp] = central_differencing_scheme(obj.grid, obj.temp_bds);
+            [coeffs_x_n_der_temp, coeffs_r_n_der_temp] = central_differencing_scheme(obj.grid);
+            [coeffs_x_n_der_temp, coeffs_r_n_der_temp] = obj.temp_bds.apply_boundary_condition_normal_derivative(coeffs_x_n_der_temp, coeffs_r_n_der_temp);
 
             % Values of normal derivatives
             [n_der_temp_x, n_der_temp_r] = evaluate_faces(coeffs_x_n_der_temp, coeffs_r_n_der_temp, obj.temp);
 
             % Coefficients for the upwind scheme
-            [coeffs_x_upwind, coeffs_r_upwind] = upwind_scheme(obj.grid, obj.flow.vx_faces, obj.flow.vr_faces, obj.temp_bds);
+            [coeffs_x_upwind, coeffs_r_upwind] = upwind_scheme(obj.grid, obj.flow.vx_faces, obj.flow.vr_faces);
             
             % Coefficients for the TVD scheme
-            [coeffs_x_TVD, coeffs_r_TVD] = TVD_scheme(obj.grid, obj.flow.vx_faces, obj.flow.vr_faces, @van_leer_flux_limiter, n_der_temp_x, n_der_temp_r, obj.temp_bds);
+            [coeffs_x_TVD, coeffs_r_TVD] = TVD_scheme(obj.grid, obj.flow.vx_faces, obj.flow.vr_faces, @van_leer_flux_limiter, n_der_temp_x, n_der_temp_r);
 
             % Coefficeints for the deferred scheme
             [coeffs_x_temp_deferred, coeffs_r_temp_deferred] = deferred_correction_face(coeffs_x_upwind, coeffs_r_upwind, coeffs_x_TVD, coeffs_r_TVD, obj.temp);
-
+            [coeffs_x_temp_deferred, coeffs_r_temp_deferred] = obj.temp_bds.apply_boundary_condition_value(coeffs_x_temp_deferred, coeffs_r_temp_deferred);
 
             clear n_der_temp_x n_der_temp_r coeffs_x_upwind coeffs_r_upwind coeffs_x_TVD coeffs_r_TVD;
 

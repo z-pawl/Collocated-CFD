@@ -1,7 +1,6 @@
-function [coeffs_x, coeffs_r] = linear_interpolation_scheme(grid, field_bd_conditions)
+function [coeffs_x, coeffs_r] = linear_interpolation_scheme(grid)
     arguments
         grid (1,1) Grid2D
-        field_bd_conditions (1,1) Boundaries 
     end
     sz = grid.sz;
 
@@ -19,7 +18,4 @@ function [coeffs_x, coeffs_r] = linear_interpolation_scheme(grid, field_bd_condi
 
     coeffs_r(:,:,1) = [grid.dr 1e30] .* center_inv_distance_r;
     coeffs_r(:,:,2) = [1e30 grid.dr] .* center_inv_distance_r;
-
-    % Applying the boundary conditions
-    [coeffs_x, coeffs_r] = field_bd_conditions.apply_boundary_condition_value(coeffs_x, coeffs_r);
 end
