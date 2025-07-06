@@ -1,0 +1,237 @@
+% Class used for calculating the physical properties of gas mixture and reaction rates
+classdef SpeciesManagerComponent < IComponent
+    properties
+        noi (1,1)                               % Number of iterations
+
+        % Dependencies
+        grid Grid2D {mustBeScalarOrEmpty}
+        flow FlowComponent {mustBeScalarOrEmpty}
+        energy EnergyComponent {mustBeScalarOrEmpty}
+        species dictionary                      % Chemical species
+
+        Y_total (:,:) double                    % Sum of mass fractions of all species (pre normalisation)
+        M_mix (:,:) double                      % Molar mass of the mixture
+        R_st (:,:) double                       % Rate of methane/steam reforming reaction
+        R_sh (:,:) double                       % Rate of water-gas-shift reaction
+
+        D_f (1,1) function_handle               % Function used to calculate mass diffusivity in mixture for all species
+
+        R double = 8.314                        % Universal gas constant
+
+        a double                                % Order of reaction with respect to methane
+        b double                                % Order of reaction with respect to water
+        A_st double                             % Arrhenius constant
+        E_a double                              % Activation energy
+        delta_G double                          % Change of standard Gibbs free energy of water-gas-shift reaction
+        w_cat double                            % Catalyst density
+
+        Jx_sum (:,:) double                     % Sum of diffusive fluxes in the x direction for all species  
+        Jr_sum (:,:) double                     % Sum of diffusive fluxes in the r direction for all species  
+
+        % Solver settings
+        relaxation_factor_R_sh (1,1) double     % Relaxation factor of the water-gas-shift reaction rate
+        inner_iters (1,1)                       % Number of inner iterations per outer iteration
+        residual_history dictionary             % Residual history of chemical species
+    end
+    methods
+        function obj = SpeciesManagerComponent(grid, flow, energy, species_names, species_list, D_function, a, b, A_st, E_a, delta_G, w_cat, relaxation_factor_R_sh, inner_iters)
+            arguments
+                grid (1,1) Grid2D
+                flow (1,1) FlowComponent
+                energy (1,1) EnergyComponent
+                species_names (:,1) string
+                species_list (:,1) Species
+                D_function (1,1) function_handle        % Function used to calculate species diffusivity in the mixture
+                a (1,1) double                          % Rate of steam-methane reforming reaction with respect to methane
+                b (1,1) double                          % Rate of steam-methane reforming reaction with respect to water
+                A_st (1,1) double                       % Arrhenius constant
+                E_a (1,1) double                        % Activation energy
+                delta_G (1,1) double                    % Change of standard Gibbs free energy of water-gas-shift reaction
+                w_cat (1,1) double                      % Catalyst density
+                relaxation_factor_R_sh (1,1) double     % Relaxation factor of the water-gas-shift reaction rate
+                inner_iters (1,1) double                % Number of inner iterations per outer iteration
+            end
+            obj.noi = 0;
+
+            obj.grid = grid;
+            obj.flow = flow;
+            obj.energy = energy;
+            
+            num_species = numel(species_list);
+            if ~isequal(num_species, numel(species_names))
+                error("The number of names and species has to be the same");
+            end
+            for i = 1:num_species
+                obj.add_species(species_names(i), species_list(i));
+            end
+
+            obj.Y_total = ones(grid.sz);
+            obj.M_mix = ones(grid.sz);
+            obj.R_st = zeros(grid.sz);
+            obj.R_sh = zeros(grid.sz);
+            
+            obj.D_f = D_function;
+
+            obj.a = a;
+            obj.b = b;
+            obj.A_st = A_st;
+            obj.E_a = E_a;
+            obj.delta_G = delta_G;
+            obj.w_cat = w_cat;
+            
+            obj.Jx_sum = zeros(grid.sz + [1 0]);
+            obj.Jr_sum = zeros(grid.sz + [0 1]);
+            
+            obj.relaxation_factor_R_sh = relaxation_factor_R_sh;
+            obj.inner_iters = inner_iters;
+        end
+
+        function add_species(obj, name, species)
+            arguments
+                obj (1,1) SpeciesManagerComponent
+                name (1,1) string
+                species (1,1) Species
+            end
+            obj.species(name) = species;
+            obj.residual_history(name) = zeros([max([obj.noi 10000]) 1]);
+        end
+
+        function update_properites(obj)
+            species_components = values(obj.species);
+            n_species = numel(species_components);
+
+            Y_total_new = zeros(obj.grid.sz);
+            M_mix_new = zeros(obj.grid.sz);
+            Jx_sum_new = zeros(obj.grid.sz + [1 0]);
+            Jr_sum_new = zeros(obj.grid.sz + [0 1]);
+            for i = 1:n_species
+                % Clipping the negative mass fractions
+                species_components(i).Y = clip(species_components(i).Y, 0, Inf);
+
+                Y_total_new = Y_total_new + species_components(i).Y;
+            end
+            for i = 1:n_species
+                % Normalizing the mass fractions
+                species_components(i).Y = species_components(i).Y ./ Y_total_new;
+                
+                M_mix_new = M_mix_new + species_components(i).Y / species_components(i).M;
+                Jx_sum_new = Jx_sum_new + species_components(i).Jx;
+                Jr_sum_new = Jr_sum_new + species_components(i).Jr;
+            end
+            for i = 1:n_species
+                species_components{i}.p_partial = species_components{i} .* M_mix_new / species_components{i}.M .* obj.flow.p;
+            end
+            obj.Y_total = Y_total_new;
+            obj.M_mix = 1 ./ M_mix_new;
+            obj.Jx_sum = Jx_sum_new;
+            obj.Jr_sum = Jr_sum_new;
+
+            obj.update_species_diffusivity();
+            obj.update_reaction_rates();
+            obj.update_source_terms();
+        end
+
+        function update_species_diffusivity(obj)
+            species_list = values(obj.species);
+            species_names = keys(obj.species);
+
+            D_species = obj.D_f();
+            for i = 1:n_species
+                species_list{i}.D = D_species(species_names{i});
+            end
+        end
+
+        function update_reaction_rates(obj)
+            ch4_component = obj.species("CH4");
+            h2o_component = obj.species("H2O");
+            h2_component = obj.species("H2");
+            co_component = obj.species("CO");
+            co2_component = obj.species("CO2");
+
+            % The methane steam reforming reaction rate is calculated explicitly
+            obj.R_st = obj.w_cat * obj.A_st .* exp(-obj.E_a ./ (obj.R .* obj.temp.temp)) ...
+                .* ch4_component.p_partial.^obj.a .* h2o_component.p_partial.^obj.b;
+
+            % The water-gas-shift reaction rate is calculated using a rate
+            % correction approach, the rate is relaxed to prevent oscillations
+
+            % The equilibrium constant - it is multiplied by the molar
+            % masses of species taking part in the reaction
+            K_sh = exp(-obj.delta_G ./ (obj.R * obj.temp.temp));
+            K_sh = K_sh * ((co2_component.M * h2_component.M) / (co_component.M * h2o_component.M)); 
+
+            % Correction approach: Y = Y* + b * R_sh; b = c * volume * M / aP
+            b_co = -obj.grid.volume * co_component.M ./ co_component.aP;
+            b_h2o = -obj.grid.volume * h2o_component.M ./ h2o_component.aP;
+            b_co2 = obj.grid.volume * co2_component.M ./ co2_component.aP;
+            b_h2 = obj.grid.volume * h2_component.M ./ h2_component.aP;
+
+            % The coefficients of the quadratic equation
+            A = K_sh .* b_co .* b_h2o - b_co2 .* b_h2;
+            B = K_sh .* (b_co .* h2o_component.Y + b_h2o .* co_component.Y) - (b_co2 .* h2_component.Y + b_h2 .* co2_component.Y);
+            C = K_sh .* co_component.Y .*  h2o_component.Y - co2_component.Y .* h2_component.Y;
+
+            B_2A = -B ./ (2 * A);
+            delta_2A = sqrt(B .* B - 4 * A .* C) ./ (2 * A);
+
+            % Updating the reaction rate using the relaxation factor
+            obj.R_sh = obj.R_sh + obj.relaxation_factor_R_sh * ((B_2A - delta_2A) - obj.R_sh);
+        end
+
+        function update_source_terms(obj)
+            sz = obj.grid.sz;
+
+            % Stoichiometric coefficients for each species in each reaction
+            % Format: species_name: [ν_st, ν_sh] — stoichiometric coefficients
+            % Reaction 1 (SMR): CH₄ + H₂O → CO + 3H₂
+            % Reaction 2 (WGS): CO + H₂O ⇌ CO₂ + H₂
+
+            stoich = {
+              "H2", [3, 1];
+              "CO", [1, -1];
+              "CO2", [0 1];
+              "CH4", [-1 0];
+              "H2O", [-1 -1];
+            };
+
+            for i = 1:size(stoich,1)
+                name = stoich{i, 1};
+                coeffs = stoich{i, 2};
+
+                sp = obj.species(name);
+                sp.src = sp.M * (coeffs(1) * obj.R_st + coeffs(2) * obj.R_sh);
+                % sp.src_lin = zeros(sz); - not changed anywhere else
+            end
+        end
+
+        function converged = iterate(obj)
+            converged = true;
+            obj.noi = obj.noi + 1;
+
+            species_components = values(obj.species);
+
+            for i = 1:obj.inner_iters
+                % Updating properties and performing an inner iteration for every species
+                obj.update_properties();
+
+                for j = 1:numel(species_components)
+                    species_components(j).inner_iteration();
+                end
+            end
+            
+            species_names = keys(obj.species);
+
+            % Updating properties
+            obj.update_properties();
+
+            % Calculating the residual and checking convergence
+            for j = 1:numel(species_components)
+                res = species_components(i).calculate_scaled_residual();
+                res_hist = obj.residual_history(species_names(i));
+                res_hist(obj.noi) = res;
+                obj.residual_history(species_names(i)) = res_hist;
+                converged = converged && res < species_components(i).tol;
+            end
+        end
+    end
+end

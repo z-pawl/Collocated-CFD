@@ -1,3 +1,10 @@
--Zaimplementować równania chemiczne (mój pomysł i stary)
+-Próba symulacji
+    -> Symulacja wyłącznie transportu substancji chemicznych
+    -> Symulacja całego reformera
+-Zaimplementować równania chemiczne
+    -> pozostał jeszcze stary sposób (skip póki co)
 -Post processing (generacja entropii)
--Zmiana modelu dyfuzji
+
+Dalsze plany:
+-Zmiana modelu dyfuzji (model Stefan'a–Maxwell'a)
+-Abstrakcja reakcji chemicznych

@@ -21,7 +21,7 @@ classdef EnergyComponent < IComponent
         k_function (1,1) function_handle = @(x) ones(x.grid.sz);
         cp_function (1,1) function_handle = @(x) ones(x.grid.sz);
 
-        % Functions used to calculate physical properties
+        % Functions used to calculate source terms
         q_function (1,1) function_handle = @(x) zeros(x.grid.sz);
         qt_function (1,1) function_handle = @(x) zeros(x.grid.sz);
 
@@ -97,10 +97,8 @@ classdef EnergyComponent < IComponent
             [k_x, k_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.k);
             % Heat capacity
             [cp_x, cp_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.cp);
-            
 
-            clear lin_int_coeffs_x lin_int_coeffs_r
-
+            clear lin_int_coeffs_x lin_int_coeffs_r;
 
             % Values and normal derivatives of temperature at faces
             % Coefficients for normal derivatives
