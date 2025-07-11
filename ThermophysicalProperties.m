@@ -45,8 +45,8 @@ classdef ThermophysicalProperties < handle
             V_D = zeros(num_species, 1);    % Diffusion volumes
         
             for i = 1:num_species
-                M(i) = species_list{i}.M;
-                V_D(i) = species_list{i}.V_D;
+                M(i) = species_list(i).M;
+                V_D(i) = species_list(i).V_D;
             end
         
             % Compute binary diffusion coefficients
@@ -73,7 +73,7 @@ classdef ThermophysicalProperties < handle
 
             for i = 1:num_species
                 for j = 1:num_species
-                    phi(i,j) = (species_list{j}.M / species_list{i}.M) ^ (0.5);
+                    phi(i,j) = (species_list(j).M / species_list(i).M) ^ (0.5);
                 end
             end
 
@@ -95,16 +95,15 @@ classdef ThermophysicalProperties < handle
         
             % Precompute molar fractions
             M_mix = obj.species_manager.M_mix;
-            molar_fractions = dictionary();
+            molar_fractions = cell(num_species,1);
             
             for i = 1:num_species
-                name = species_names{i};
-                sp = species_list{i};
-                molar_fractions(name) = sp.Y .* M_mix ./ sp.M;
+                sp = species_list(i);
+                molar_fractions{i} = sp.Y .* M_mix ./ sp.M;
             end
         
             % Allocate output map for diffusivities
-            D = dictionary();
+            D = containers.Map();
         
             % Common parameters
             T = obj.energy.temp;     % Temperature field
@@ -112,13 +111,12 @@ classdef ThermophysicalProperties < handle
         
             % Compute diffusivities for each species
             for i = 1:num_species
-                name_i = species_names{i};
+                name_i = species_names(i);
                 D_mix_inv = zeros(size(T));
         
                 for j = 1:num_species
                     if j ~= i
-                        name_j = species_names{j};
-                        X_j = molar_fractions(name_j);
+                        X_j = molar_fractions{j};
                         D_ij = obj.D_AB(i, j);  % Binary diffusivity
                         D_mix_inv = D_mix_inv + X_j / D_ij;
                     end
@@ -152,7 +150,7 @@ classdef ThermophysicalProperties < handle
             cp = zeros(size(T));
             
             for i = 1:num_species
-                sp = species_list{i};
+                sp = species_list(i);
                 
                 % Molar fraction: Y * M_mix / M_i
                 X_i = sp.Y .* M_mix ./ sp.M;
@@ -193,7 +191,7 @@ classdef ThermophysicalProperties < handle
             k_i = cell(num_species, 1); % Thermal conductivities
 
             for i = 1:num_species
-                sp = species_list{i};
+                sp = species_list(i);
                 
                 % Molar fraction: Y * M_mix / M_i
                 X_i{i} = sp.Y .* M_mix ./ sp.M;
@@ -208,7 +206,7 @@ classdef ThermophysicalProperties < handle
             for i = 1:num_species
                 denominator = zeros(sz);
                 for j = 1:num_species
-                    phi = phi_f(species_list{i}.M, species_list{j}.M, visc_i{i}, visc_i{j});
+                    phi = phi_f(species_list(i).M, species_list(j).M, visc_i{i}, visc_i{j});
                     denominator = denominator + X_i{j} .* phi;
                 end
                 k = k + X_i{i} .* k_i{i} ./ denominator;
@@ -231,7 +229,7 @@ classdef ThermophysicalProperties < handle
             visc_i = cell(num_species, 1); % Dynamic viscosities
 
             for i = 1:num_species
-                sp = species_list{i};
+                sp = species_list(i);
                 
                 % Molar fraction: Y * M_mix / M_i
                 X_i{i} = sp.Y .* M_mix ./ sp.M;

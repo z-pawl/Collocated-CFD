@@ -113,13 +113,7 @@ classdef SpeciesManagerComponent < IComponent
             Jx_sum_new = zeros(obj.grid.sz + [1 0]);
             Jr_sum_new = zeros(obj.grid.sz + [0 1]);
 
-            % % The WGS reaction rate is too high - the reactants mass fractions are going negative
-            % mask = obj.species("CO").Y < 0 | obj.species("H2O").Y < 0;
-            % obj.R_sh(mask) = obj.R_sh(mask) - 0.05 * abs(obj.R_sh(mask));
-            % % The WGS reaction rate is too low - the products mass fractions are going negative
-            % mask = obj.species("CO2").Y < 0 | obj.species("H2").Y < 0;
-            % obj.R_sh(mask) = obj.R_sh(mask) + 0.05 * abs(obj.R_sh(mask));
-
+            % The WGS reaction rate is too high - 
 
             for i = 1:n_species
                 % Clipping the negative mass fractions

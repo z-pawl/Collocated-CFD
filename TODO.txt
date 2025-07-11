@@ -1,8 +1,9 @@
 -Próba symulacji
-    -> Symulacja wyłącznie transportu substancji chemicznych
     -> Symulacja całego reformera
+-Dodać jednostki
 -Zaimplementować równania chemiczne
     -> pozostał jeszcze stary sposób (skip póki co)
+    -> Modyfikacja tempa reakcji w zależności od konieczności clippingu (jak???) - chyba i tak nie ma problemów
 -Post processing (generacja entropii)
 
 Dalsze plany:

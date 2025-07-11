@@ -135,10 +135,40 @@ classdef Species < handle
             % Calculating coefficients of discretized equations
             coeff = obj.get_coefficients();
 
-            obj.aP = coeff(:,:,1);
-
             % Solving the system of equations and updating the field using the relaxation factor
             obj.Y = obj.Y + obj.relaxation_factor * (solve(coeff, obj.Y, obj.solver_iters, [1; 2; 3; 4], 1) - obj.Y);
+            
+
+            % Updating the aP, Jx and Jr values used by the species manager
+
+            obj.aP = coeff(:,:,1);
+
+            % Coefficients used to calculate the physical properties at faces
+            [lin_int_coeffs_x, lin_int_coeffs_r] = linear_interpolation_scheme(obj.grid);
+            [lin_int_coeffs_x, lin_int_coeffs_r] = obj.grid.domain_boundary.apply_boundary_condition_value(lin_int_coeffs_x, lin_int_coeffs_r);
+            
+            % Properties interpolated to faces
+            % Density
+            [rho_x, rho_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.flow.rho);
+            % Diffusivity
+            [diff_x, diff_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.D);
+
+            clear lin_int_coeffs_x lin_int_coeffs_r;
+
+            % Values and normal derivatives of temperature at faces
+            % Coefficients for normal derivatives
+            [coeffs_x_n_der, coeffs_r_n_der] = central_differencing_scheme(obj.grid);
+            [coeffs_x_n_der, coeffs_r_n_der] = obj.species_bds.apply_boundary_condition_normal_derivative(coeffs_x_n_der, coeffs_r_n_der);
+
+            % Values of normal derivatives
+            [n_der_x, n_der_r] = evaluate_faces(coeffs_x_n_der, coeffs_r_n_der, obj.Y);
+
+            % D = rho * diff * A
+            Dx = rho_x .* diff_x .* obj.grid.face_area_x;
+            Dr = rho_r .* diff_r .* obj.grid.face_area_r;
+
+            obj.Jx = Dx .* n_der_x;
+            obj.Jr = Dr .* n_der_r;
         end
 
         function res = calculate_scaled_residual(obj)
