@@ -7,25 +7,25 @@ classdef FlowComponent < IComponent
 
 
         % Collocated grid approach is used to represent velocity and pressure fields 
-        vx (:,:) double             % X - component of velocity
-        vr (:,:) double             % R - component of velocity
-        p (:,:) double              % Pressure
+        vx (:,:) double             % X - component of velocity [m/s]
+        vr (:,:) double             % R - component of velocity [m/s]
+        p (:,:) double              % Pressure [Pa]
 
-        % Rhie-chow interpolated velocities
+        % Rhie-chow interpolated velocities [m/s]
         vx_faces (:,:) double
         vr_faces (:,:) double
 
 
         % Physical properties
-        porosity double             % Porosity
-        rho (:,:) double            % Density
-        visc (:,:) double           % Dynamic viscosity
+        porosity double             % Porosity [-]
+        rho (:,:) double            % Density [kg/m^3]
+        visc (:,:) double           % Dynamic viscosity [Pa*s]
 
         % Source terms
-        srcx (:,:) double           % Constant momentum source term in the x direction
-        src_linx (:,:) double       % Linear momentum source term in the x direction
-        srcr (:,:) double           % Constant momentum source term in the r direction
-        src_linr (:,:) double       % Linear momentum source term in the r direction
+        srcx (:,:) double           % Constant momentum source term in the x direction [kg/(m^2*s^2)]
+        src_linx (:,:) double       % Linear momentum source term in the x direction [kg/(m^3*s)]
+        srcr (:,:) double           % Constant momentum source term in the r direction [kg/(m^2*s^2)]
+        src_linr (:,:) double       % Linear momentum source term in the r direction [kg/(m^3*s)]
 
 
         % Functions used to calculate physical properties
@@ -46,7 +46,7 @@ classdef FlowComponent < IComponent
         p_corr_bds Boundaries {mustBeScalarOrEmpty}     % Pressure correction boundary conditions
 
         % Dependencies of the geometric term in the discretized momentum in
-        % the radial direction on vr_s, vr_P, vr_n
+        % the radial direction on vr_s, vr_P, vr_n [m]
         % geom_term = k_s * vr_s + k_P * vr_P + k_n * vr_n
         geom_term_dep_s (:,:) double
         geom_term_dep_P (:,:) double
@@ -57,6 +57,7 @@ classdef FlowComponent < IComponent
         tol_p (1,1) double {mustBeNonnegative}          % Convergence criteria for pressure
         relaxation_factor_v (1,1) double                % Velocity relaxation factor
         relaxation_factor_p (1,1) double                % Pressure relaxation factor
+        implicit_relaxation_factor_v (1,1) double = 0.9 % Implicit relaxation factor for velocity to ensure diagonal dominance
         inner_iters (1,1)                               % Number of inner iterations per outer iteration
         solver_iters_v (1,1)                            % Number of velocity solver iterations per inner iteration
         solver_iters_p (1,1)                            % Number of pressure solver iterations per inner iteration
@@ -68,10 +69,10 @@ classdef FlowComponent < IComponent
         function obj = FlowComponent(grid, vx, vr, p, porosity, rho_function, visc_function, srcx_function, src_linx_function, srcr_function, src_linr_function, tol_v, tol_p, relaxation_factor_v, relaxation_factor_p, inner_iters, solver_iters_v, solver_iters_p)
             arguments
                 grid (1,1) Grid2D
-                vx (:,:) double     % Initial x-component velocity
-                vr (:,:) double     % Initial r-component velocity
-                p  (:,:) double     % Initial pressure
-                porosity double
+                vx (:,:) double     % Initial x-component velocity [m/s]
+                vr (:,:) double     % Initial r-component velocity field [m/s]
+                p  (:,:) double     % Initial pressure field [Pa]
+                porosity double     % Porosity [-]
                 rho_function (1,1) function_handle
                 visc_function (1,1) function_handle
                 srcx_function (1,1) function_handle
@@ -91,6 +92,7 @@ classdef FlowComponent < IComponent
                 error("The initial fields must have the same size as the grid");
             end
             
+            % Assigning the properties
             obj.noi = 0;
 
             obj.grid = grid;
@@ -137,19 +139,20 @@ classdef FlowComponent < IComponent
             % volume (phi=0..2pi, r=rs..rn=rP-dr/2..rP+dr/2, x=xw..xe=xP-dx/2..xP+dx/2
 
             % Following expressions are then obtained
-            k = 2 * pi * obj.grid.dx ./ (obj.grid.dr .^ 2);
-            log_term = log((obj.grid.cent_pos_r + obj.grid.dr / 2) / (obj.grid.cent_pos_r - obj.grid.dr / 2));
+            k = 2 * pi * obj.grid.dx ./ (obj.grid.dr .^ 2); % [1/m]
+            log_term = log((obj.grid.cent_pos_r + obj.grid.dr / 2) / (obj.grid.cent_pos_r - obj.grid.dr / 2)); % [-]
 
             obj.geom_term_dep_s = k .* (log_term .* (2 * obj.grid.cent_pos_r .^ 2 + obj.grid.dr .* obj.grid.cent_pos_r) ...
-                - obj.grid.dr .^ 2 - 2 * obj.grid.dr .* obj.grid.cent_pos_r);
+                - obj.grid.dr .^ 2 - 2 * obj.grid.dr .* obj.grid.cent_pos_r); % [m]
 
             obj.geom_term_dep_P = k .* (log_term .* (obj.grid.dr .^ 2 - 4 * obj.grid.cent_pos_r .^ 2) ...
-                + 4 * obj.grid.dr .* obj.grid.cent_pos_r);
+                + 4 * obj.grid.dr .* obj.grid.cent_pos_r); % [m]
 
             obj.geom_term_dep_n = k .* (log_term .* (2 * obj.grid.cent_pos_r .^ 2 - obj.grid.dr .* obj.grid.cent_pos_r) ...
-                + obj.grid.dr .^ 2 - 2 * obj.grid.dr .* obj.grid.cent_pos_r);
+                + obj.grid.dr .^ 2 - 2 * obj.grid.dr .* obj.grid.cent_pos_r); % [m]
         end
 
+        % Updates fluid properties and the source terms
         function update_properties(obj)
             obj.rho = obj.rho_function();
             obj.visc = obj.visc_function();
@@ -164,8 +167,8 @@ classdef FlowComponent < IComponent
         function update_face_velocities(obj, vx, vr, aP_vx, aP_vr)
             [rhie_chow_vx, rhie_chow_vr] = rhie_chow_interpolation(obj.grid, vx, vr, obj.p, obj.vx_bds, obj.vr_bds, obj.p_bds, aP_vx, aP_vr);
             
-            obj.vx_faces = rhie_chow_vx;
-            obj.vr_faces = rhie_chow_vr;
+            obj.vx_faces = rhie_chow_vx; % [m/s]
+            obj.vr_faces = rhie_chow_vr; % [m/s]
         end
 
         % Converts pressure boundary conditions to pressure correction boundary conditions
@@ -183,18 +186,18 @@ classdef FlowComponent < IComponent
             [lin_int_coeffs_x, lin_int_coeffs_r] = obj.grid.domain_boundary.apply_boundary_condition_value(lin_int_coeffs_x, lin_int_coeffs_r);
             
             % Properties interpolated to faces
-            % Density
+            % Density [kg/m^3]
             [rho_x, rho_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.rho);
-            % Dynamic viscosity
+            % Dynamic viscosity [Pa*s]
             [visc_x, visc_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.visc);
 
             clear lin_int_coeffs_x lin_int_coeffs_r
 
-            % F = rho * v * A / porosity ^ 2
+            % F = rho * v * A / porosity ^ 2 [kg/s]
             Fx = rho_x .* obj.vx_faces .* obj.grid.face_area_x / obj.porosity .^ 2;
             Fr = rho_r .* obj.vr_faces .* obj.grid.face_area_r / obj.porosity .^ 2;
 
-            % D = visc * A / porosity
+            % D = visc * A / porosity [kg*m/s]
             Dx = visc_x .* obj.grid.face_area_x / obj.porosity;
             Dr = visc_r .* obj.grid.face_area_r / obj.porosity;
 
@@ -207,20 +210,24 @@ classdef FlowComponent < IComponent
             clear Fx Fr Dx Dr;
 
 
-            % Calculating the volume integral of pressure gradient
+            % Calculating the volume integral of pressure gradient [N]=[kg*m/s^2]
 
             % Coefficients for pressure interpolation
             [coeff_px, coeff_pr] = linear_interpolation_scheme(obj.grid);
             [coeff_px, coeff_pr] = obj.p_bds.apply_boundary_condition_value(coeff_px, coeff_pr);
-            % Pressure values at faces
+
+            % Pressure values at faces [Pa]
             [px, pr] = evaluate_faces(coeff_px, coeff_pr, obj.p);
+
             % Adding the volume integral of pressure gradient as source terms
             coeff_vx(:,:,6) = coeff_vx(:,:,6) + obj.grid.volume ./ obj.grid.dx .* (px(1:end-1,:) - px(2:end,:));
             coeff_vr(:,:,6) = coeff_vr(:,:,6) + obj.grid.volume ./ obj.grid.dr .* (pr(:,1:end-1) - pr(:,2:end));
 
-            % Adding slight implicit relaxation to ensure the diagonal dominance
-            coeff_vx = implicit_relaxation(coeff_vx, obj.vx, 0.999);
-            coeff_vr = implicit_relaxation(coeff_vr, obj.vr, 0.999);
+            % Adding implicit relaxation to ensure the diagonal dominance
+            coeff_vx = implicit_relaxation(coeff_vx, obj.vx, obj.implicit_relaxation_factor_v);
+            coeff_vr = implicit_relaxation(coeff_vr, obj.vr, obj.implicit_relaxation_factor_v);
+
+            x = any(any(coeff_vx(:,:,1) - sum(coeff_vx(:,:,2:5),3) < 0)) || any(any(coeff_vr(:,:,1) - sum(coeff_vr(:,:,2:5),3) < 0));
         end
 
         function coeff_vx = get_coefficients_vx(obj, Fx, Fr, Dx, Dr)
@@ -230,7 +237,7 @@ classdef FlowComponent < IComponent
             [coeffs_x_n_der_vx, coeffs_r_n_der_vx] = central_differencing_scheme(obj.grid);
             [coeffs_x_n_der_vx, coeffs_r_n_der_vx] = obj.vx_bds.apply_boundary_condition_normal_derivative(coeffs_x_n_der_vx, coeffs_r_n_der_vx);
 
-            % Values of normal derivatives
+            % Values of normal derivatives [1/s]
             [n_der_vx_x, n_der_vx_r] = evaluate_faces(coeffs_x_n_der_vx, coeffs_r_n_der_vx, obj.vx);
 
             % Coefficients for the upwind scheme
@@ -239,14 +246,13 @@ classdef FlowComponent < IComponent
             % Coefficients for the TVD scheme
             [coeffs_x_TVD, coeffs_r_TVD] = TVD_scheme(obj.grid, obj.vx_faces, obj.vr_faces, @van_leer_flux_limiter, n_der_vx_x, n_der_vx_r);
 
-            % Coefficeints for the deferred scheme
+            % Coefficients for the deferred scheme
             [coeffs_x_vx_deferred, coeffs_r_vx_deferred] = deferred_correction_face(coeffs_x_upwind, coeffs_r_upwind, coeffs_x_TVD, coeffs_r_TVD, obj.vx);
             [coeffs_x_vx_deferred, coeffs_r_vx_deferred] = obj.vx_bds.apply_boundary_condition_value(coeffs_x_vx_deferred, coeffs_r_vx_deferred);
 
             clear n_der_vx_x n_der_vx_r coeffs_x_upwind coeffs_r_upwind coeffs_x_TVD coeffs_r_TVD;
 
             coeff_vx = assemble_coeff_array(Fx, Fr, Dx, Dr, coeffs_x_vx_deferred, coeffs_r_vx_deferred, coeffs_x_n_der_vx, coeffs_r_n_der_vx, obj.srcx, obj.src_linx, obj.grid.volume);
-
         end
 
         function coeff_vr = get_coefficients_vr(obj, Fx, Fr, Dx, Dr)
@@ -256,7 +262,7 @@ classdef FlowComponent < IComponent
             [coeffs_x_n_der_vr, coeffs_r_n_der_vr] = central_differencing_scheme(obj.grid);
             [coeffs_x_n_der_vr, coeffs_r_n_der_vr] = obj.vr_bds.apply_boundary_condition_normal_derivative(coeffs_x_n_der_vr, coeffs_r_n_der_vr);
 
-            % Values of normal derivatives
+            % Values of normal derivatives [1/s]
             [n_der_vr_x, n_der_vr_r] = evaluate_faces(coeffs_x_n_der_vr, coeffs_r_n_der_vr, obj.vr);
 
             % Coefficients for the upwind scheme
@@ -265,7 +271,7 @@ classdef FlowComponent < IComponent
             % Coefficients for the TVD scheme
             [coeffs_x_TVD, coeffs_r_TVD] = TVD_scheme(obj.grid, obj.vx_faces, obj.vr_faces, @van_leer_flux_limiter, n_der_vr_x, n_der_vr_r);
 
-            % Coefficeints for the deferred scheme
+            % Coefficients for the deferred scheme
             [coeffs_x_vr_deferred, coeffs_r_vr_deferred] = deferred_correction_face(coeffs_x_upwind, coeffs_r_upwind, coeffs_x_TVD, coeffs_r_TVD, obj.vr);
             [coeffs_x_vr_deferred, coeffs_r_vr_deferred] = obj.vr_bds.apply_boundary_condition_value(coeffs_x_vr_deferred, coeffs_r_vr_deferred);
 
@@ -275,11 +281,11 @@ classdef FlowComponent < IComponent
             coeff_vr = assemble_coeff_array(Fx, Fr, Dx, Dr, coeffs_x_vr_deferred, coeffs_r_vr_deferred, coeffs_x_n_der_vr, coeffs_r_n_der_vr, obj.srcr, obj.src_linr, obj.grid.volume);
         
             % Additional geometric term
-            [~, vr_at_r_faces] = evaluate_faces(coeffs_x_vr_deferred, coeffs_r_vr_deferred, obj.vr);
-            geom_term = obj.visc * obj.porosity ...
+            [~, vr_at_r_faces] = evaluate_faces(coeffs_x_vr_deferred, coeffs_r_vr_deferred, obj.vr); % [m/s]
+            geom_term = obj.visc / obj.porosity ...
                 .* (obj.geom_term_dep_s .* vr_at_r_faces(:,1:end-1) ...
-                + obj.geom_term_dep_n .* vr_at_r_faces(:,2:end)) ...
-                + obj.geom_term_dep_P .* obj.vr;
+                + obj.geom_term_dep_n .* vr_at_r_faces(:,2:end) ...
+                + obj.geom_term_dep_P .* obj.vr); % [N]=[kg*m/s^2]
 
             coeff_vr(:,:,6) = coeff_vr(:,:,6) - geom_term;
         end
@@ -290,19 +296,19 @@ classdef FlowComponent < IComponent
             [lin_int_coeffs_x, lin_int_coeffs_r] = obj.grid.domain_boundary.apply_boundary_condition_value(lin_int_coeffs_x, lin_int_coeffs_r);
 
             % Interpolated quantities
-            % Density
+            % Density [kg/m^3]
             [rho_x, rho_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.rho);
-            % Df
+            % Df [m^3*s/kg]
             [Df_x, ~] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.grid.volume ./ coeff_vx_aP);
             [~, Df_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.grid.volume ./ coeff_vr_aP);
 
             clear lin_int_coeffs_x lin_int_coeffs_x coeff_vx_aP coeff_vr_aP
 
             % Calculating the coefficients used in the discretized equations
-            c_x = rho_x .* obj.grid.face_area_x .* Df_x;
-            c_r = rho_r .* obj.grid.face_area_r .* Df_r;
-            Fx = rho_x .* obj.vx_faces .* obj.grid.face_area_x;
-            Fr = rho_r .* obj.vr_faces .* obj.grid.face_area_r;
+            c_x = rho_x .* obj.grid.face_area_x .* Df_x; % [m^2*s]
+            c_r = rho_r .* obj.grid.face_area_r .* Df_r; % [m^2*s]
+            Fx = rho_x .* obj.vx_faces .* obj.grid.face_area_x; % [kg/s]
+            Fr = rho_r .* obj.vr_faces .* obj.grid.face_area_r; % [kg/s]
             clear rho_x rho_r coeff_vx_aP_f coeff_vr_aP_f Df_x Df_r
 
             % Calculating coefficients for normal derivatives at faces for pressure
@@ -313,18 +319,18 @@ classdef FlowComponent < IComponent
             % Preallocating the array
             coeff_p_corr = zeros([obj.grid.sz 6]);
 
-            % aP
+            % aP [m*s]
             coeff_p_corr(:,:,1) = -c_x(1:end-1,:) .* coeff_der_p_x(1:end-1,:,2) + c_x(2:end,:) .* coeff_der_p_x(2:end,:,1) ...
                 + -c_r(:,1:end-1) .* coeff_der_p_r(:,1:end-1,2) + c_r(:,2:end) .* coeff_der_p_r(:,2:end,1);
-            % aW
+            % aW [m*s]
             coeff_p_corr(:,:,2) = c_x(1:end-1,:) .* coeff_der_p_x(1:end-1,:,1);
-            % aE
+            % aE [m*s]
             coeff_p_corr(:,:,3) = -c_x(2:end,:) .* coeff_der_p_x(2:end,:,2);
-            % aS
+            % aS [m*s]
             coeff_p_corr(:,:,4) = c_r(:,1:end-1) .* coeff_der_p_r(:,1:end-1,1);
-            % aN
+            % aN [m*s]
             coeff_p_corr(:,:,5) = -c_r(:,2:end) .* coeff_der_p_r(:,2:end,2);
-            % b
+            % b [kg/s]
             coeff_p_corr(:,:,6) = Fx(2:end,:) - Fx(1:end-1,:) + Fr(:,2:end) - Fr(:,1:end-1) ...
                 + c_x(1:end-1,:) .* coeff_der_p_x(1:end-1,:,3) - c_x(2:end,:) .* coeff_der_p_x(2:end,:,3) ...
                 + c_r(:,1:end-1) .* coeff_der_p_r(:,1:end-1,3) - c_r(:,2:end) .* coeff_der_p_r(:,2:end,3);
@@ -339,40 +345,47 @@ classdef FlowComponent < IComponent
                 obj.update_properties();
                 [coeff_vx, coeff_vr] = obj.get_coefficients_v();
 
-                % Calculating the intermediate velocities
+                % Calculating the intermediate velocities [m/s]
                 vx_star=solve(coeff_vx, obj.vx, obj.solver_iters_v, randi([1 4]), obj.relaxation_factor_v);
                 vr_star=solve(coeff_vr, obj.vr, obj.solver_iters_v, randi([1 4]), obj.relaxation_factor_v);
 
+                % Calculating the unrelaxed central coefficients used to
+                % calculate rhie chow correction and the pressure correction [kg/s]
+                coeff_vx_unrelaxed = coeff_vx(:,:,1) * obj.implicit_relaxation_factor_v;
+                coeff_vr_unrelaxed = coeff_vr(:,:,1) * obj.implicit_relaxation_factor_v;
+
                 % Calculating the face velocities using the intermediate velocities
-                obj.update_face_velocities(vx_star, vr_star, coeff_vx(:,:,1), coeff_vr(:,:,1));
+                obj.update_face_velocities(vx_star, vr_star, coeff_vx_unrelaxed, coeff_vr_unrelaxed);
 
                 % Calculating the coefficients of the pressure correction equation and solving it
-                coeff_p_corr = obj.get_coefficients_p_corr(coeff_vx(:,:,1), coeff_vr(:,:,1));
+                coeff_p_corr = obj.get_coefficients_p_corr(coeff_vx_unrelaxed, coeff_vr_unrelaxed);
 
-                p_corr = solve(coeff_p_corr, zeros(obj.grid.sz), obj.solver_iters_p, [1;2;3;4], 1);
+                p_corr = solve(coeff_p_corr, zeros(obj.grid.sz), obj.solver_iters_p, [1;2;3;4], 1); % [Pa]
 
                 % Calculating the pressure force from the pressure correction and using it to correct the velocities
                 % Coefficients for pressure interpolation
                 [coeff_px, coeff_pr] = linear_interpolation_scheme(obj.grid);
                 [coeff_px, coeff_pr] = obj.p_corr_bds.apply_boundary_condition_value(coeff_px, coeff_pr);
-                % Pressure correction values at faces
+                % Pressure correction values at faces [Pa]
                 [p_corr_x, p_corr_r] = evaluate_faces(coeff_px, coeff_pr, p_corr);
                 % Adding the volume integral of pressure gradient as source terms
-                p_force_x = obj.grid.volume ./ obj.grid.dx .* (p_corr_x(1:end-1,:) - p_corr_x(2:end,:));
-                p_force_r = obj.grid.volume ./ obj.grid.dr .* (p_corr_r(:,1:end-1) - p_corr_r(:,2:end));
+                p_force_x = obj.grid.volume ./ obj.grid.dx .* (p_corr_x(1:end-1,:) - p_corr_x(2:end,:)); % [N]=[kg*m/s^2]
+                p_force_r = obj.grid.volume ./ obj.grid.dr .* (p_corr_r(:,1:end-1) - p_corr_r(:,2:end)); % [N]=[kg*m/s^2]
 
-                vx_star = vx_star + p_force_x ./ coeff_vx(:,:,1) * obj.relaxation_factor_v;
-                vr_star = vr_star + p_force_r ./ coeff_vr(:,:,1) * obj.relaxation_factor_v;
+                vx_star = vx_star + p_force_x ./ coeff_vx(:,:,1) * obj.relaxation_factor_v; % [m/s]
+                vr_star = vr_star + p_force_r ./ coeff_vr(:,:,1) * obj.relaxation_factor_v; % [m/s]
 
                 % Updating the fields using the relaxation factor
-                obj.p = obj.p + p_corr * obj.relaxation_factor_p;
-                obj.vx = vx_star;
-                obj.vr = vr_star;
+                obj.p = obj.p + p_corr * obj.relaxation_factor_p; % [Pa]
+                obj.vx = vx_star; % [m/s]
+                obj.vr = vr_star; % [m/s]
 
                 % Updating the face velocities and calculating the face velocities using new velocities
                 obj.update_properties();
                 [coeff_vx, coeff_vr] = obj.get_coefficients_v();
-                obj.update_face_velocities(obj.vx, obj.vr, coeff_vx(:,:,1), coeff_vr(:,:,1));
+                coeff_vx_unrelaxed = coeff_vx(:,:,1) * obj.implicit_relaxation_factor_v; % [kg/s]
+                coeff_vr_unrelaxed = coeff_vr(:,:,1) * obj.implicit_relaxation_factor_v; % [kg/s]
+                obj.update_face_velocities(obj.vx, obj.vr, coeff_vx_unrelaxed, coeff_vr_unrelaxed);
             end
 
             % Updating properties
@@ -380,7 +393,9 @@ classdef FlowComponent < IComponent
 
             % Calculating the residual and checking convergence
             [coeff_vx, coeff_vr] = obj.get_coefficients_v();
-            coeff_p_corr = obj.get_coefficients_p_corr(coeff_vx(:,:,1), coeff_vr(:,:,1));
+            coeff_vx_unrelaxed = coeff_vx(:,:,1) * obj.implicit_relaxation_factor_v; % [kg/s]
+            coeff_vr_unrelaxed = coeff_vr(:,:,1) * obj.implicit_relaxation_factor_v; % [kg/s]
+            obj.update_face_velocities(obj.vx, obj.vr, coeff_vx_unrelaxed, coeff_vr_unrelaxed);
 
             res_vx = calculate_residual(coeff_vx, obj.vx);
             res_vr = calculate_residual(coeff_vr, obj.vr);

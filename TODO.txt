@@ -1,11 +1,15 @@
+-Post processing (generacja entropii)
 -Próba symulacji
     -> Symulacja całego reformera
--Dodać jednostki
+        -> Prędkość na wlocie jest błędna (2 razy mniejsza niż powinna)
+        -> Kompletnie inne wyniki niż w artykule - możliwe, że moje i tak są poprawne
+-Zmiana rezyduów ciśnienia na rezyduów równania ciągłości
+-Dodać nowy solver (może BiCGSTAB)
 -Zaimplementować równania chemiczne
     -> pozostał jeszcze stary sposób (skip póki co)
     -> Modyfikacja tempa reakcji w zależności od konieczności clippingu (jak???) - chyba i tak nie ma problemów
--Post processing (generacja entropii)
+
 
 Dalsze plany:
--Zmiana modelu dyfuzji (model Stefan'a–Maxwell'a)
 -Abstrakcja reakcji chemicznych
+-Zmiana modelu dyfuzji (model Stefan'a–Maxwell'a)

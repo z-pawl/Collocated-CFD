@@ -6,16 +6,16 @@ classdef EnergyComponent < IComponent
         grid Grid2D {mustBeScalarOrEmpty}
         flow FlowComponent {mustBeScalarOrEmpty}
 
-        temp (:,:) double   % Temperature
+        temp (:,:) double   % Temperature [K]
 
 
         % Thermophysical properties
-        k (:,:) double      % Thermal conductivity
-        cp (:,:) double     % Heat Capacity
+        k (:,:) double      % Thermal conductivity [W/(m*K)]
+        cp (:,:) double     % Heat Capacity % [J/(kg*K)]
 
         % Source terms
-        q (:,:) double      % Constant heat generation term
-        qt (:,:) double     % Linear heat generation term q_total = q + qt * temp
+        q (:,:) double      % Constant heat generation term [W]
+        qt (:,:) double     % Linear heat generation term q_total = q + qt * temp [W/K]
 
         % Functions used to calculate physical properties
         k_function (1,1) function_handle = @(x) ones(x.grid.sz);
@@ -42,7 +42,7 @@ classdef EnergyComponent < IComponent
             arguments
                 grid (1,1) Grid2D
                 flow (1,1) FlowComponent
-                temp (:,:) double % Initial temperature
+                temp (:,:) double % Initial temperature field [K]
                 k_function (1,1) function_handle
                 cp_function (1,1) function_handle
                 q_function (1,1) function_handle
@@ -57,6 +57,7 @@ classdef EnergyComponent < IComponent
                 error("The initial fields must have the same size as the grid");
             end
 
+            % Assigning the properties
             obj.noi = 0;
             
             obj.grid = grid;
@@ -91,11 +92,11 @@ classdef EnergyComponent < IComponent
             [lin_int_coeffs_x, lin_int_coeffs_r] = obj.grid.domain_boundary.apply_boundary_condition_value(lin_int_coeffs_x, lin_int_coeffs_r);
             
             % Properties interpolated to faces
-            % Density
+            % Density [kg/m^3]
             [rho_x, rho_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.flow.rho);
-            % Thermal conductivity
+            % Thermal conductivity [W/(m*K)]
             [k_x, k_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.k);
-            % Heat capacity
+            % Heat capacity [J/(kg*K)]
             [cp_x, cp_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.cp);
 
             clear lin_int_coeffs_x lin_int_coeffs_r;
@@ -105,7 +106,7 @@ classdef EnergyComponent < IComponent
             [coeffs_x_n_der_temp, coeffs_r_n_der_temp] = central_differencing_scheme(obj.grid);
             [coeffs_x_n_der_temp, coeffs_r_n_der_temp] = obj.temp_bds.apply_boundary_condition_normal_derivative(coeffs_x_n_der_temp, coeffs_r_n_der_temp);
 
-            % Values of normal derivatives
+            % Values of normal derivatives [K/m]
             [n_der_temp_x, n_der_temp_r] = evaluate_faces(coeffs_x_n_der_temp, coeffs_r_n_der_temp, obj.temp);
 
             % Coefficients for the upwind scheme
@@ -121,11 +122,11 @@ classdef EnergyComponent < IComponent
             clear n_der_temp_x n_der_temp_r coeffs_x_upwind coeffs_r_upwind coeffs_x_TVD coeffs_r_TVD;
 
 
-            % F = rho * cp * v * A
+            % F = rho * cp * v * A [W/K]
             Fx = rho_x .* cp_x .* obj.flow.vx_faces .* obj.grid.face_area_x;
             Fr = rho_r .* cp_r .* obj.flow.vr_faces .* obj.grid.face_area_r;
 
-            % D = k * A
+            % D = k * A [W*m/K]
             Dx = k_x .* obj.grid.face_area_x;
             Dr = k_r .* obj.grid.face_area_r;
 

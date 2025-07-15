@@ -10,7 +10,7 @@ solid_phase_thermal_conductivity = 20.0;
 catalyst_density = 2.5e5;
 
 temp_inlet = 800;
-v_inlet = 0.25;
+v_inlet = 1;
 temp_wall = 800;
 p_atm = 101325;
 SC = 2;
@@ -67,14 +67,14 @@ diffusion_volume_H2O = 13.1;
 
 % Parametry solvera
 inner_iters = 5;
-rel_fact_sp = 0.3;
-rel_fact_R_st = 0.08;
-rel_fact_R_sh = 0.08;
+rel_fact_sp = 0.75;
+rel_fact_R_st = 0.3;
+rel_fact_R_sh = 0.1;
 tol_sp = 1e-7;
-sp_iters = 20;
+sp_iters = 25;
 
 %% Definicja siatki
-sz = [90 15];
+sz = [60 10];
 
 offset = 1e-30;
 dx = length * ones([sz(1) 1]) / sz(1);
@@ -89,20 +89,14 @@ flow.vx_faces = v_inlet*ones(sz + [1 0]);
 flow.vr_faces = zeros(sz + [0 1]);
 energy = EnergyComponent(grid, flow, 1200*ones(sz), @(x) ones(sz), @(x) ones(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-9, 1, 5, 30);
 
-species_manager = SpeciesManagerComponent(grid, flow, energy, [], Species.empty, @(x) 0, a, b, A_st, E_a, delta_G, catalyst_density, rel_fact_R_st, rel_fact_R_sh, inner_iters);
-h2 = Species(grid, flow, species_manager, zeros(sz), heat_cap_H2, visc_H2, therm_cond_H2, M_H2, diffusion_volume_H2, tol_sp, rel_fact_sp, sp_iters);
-co = Species(grid, flow, species_manager, zeros(sz), heat_cap_CO, visc_CO, therm_cond_CO, M_CO, diffusion_volume_CO, tol_sp, rel_fact_sp, sp_iters);
-co2 = Species(grid, flow, species_manager, zeros(sz), heat_cap_CO2, visc_CO2, therm_cond_CO2, M_CO2, diffusion_volume_CO2, tol_sp, rel_fact_sp, sp_iters);
-ch4 = Species(grid, flow, species_manager, M_CH4/(M_CH4+SC*M_H2O) * ones(sz), heat_cap_CH4, visc_CH4, therm_cond_CH4, M_CH4, diffusion_volume_CH4, tol_sp, rel_fact_sp, sp_iters);
-h2o = Species(grid, flow, species_manager, SC*M_H2O/(M_CH4+SC*M_H2O) * ones(sz), heat_cap_H2O, visc_H2O, therm_cond_H2O, M_H2O, diffusion_volume_H2O, tol_sp, rel_fact_sp, sp_iters);
+species_manager = SpeciesManagerComponent(grid, flow, energy, @(x) 0, a, b, A_st, E_a, delta_G, catalyst_density, rel_fact_R_st, rel_fact_R_sh, inner_iters);
+h2 = Species("H2", grid, flow, species_manager, zeros(sz), heat_cap_H2, visc_H2, therm_cond_H2, M_H2, diffusion_volume_H2, tol_sp, rel_fact_sp, sp_iters);
+co = Species("CO", grid, flow, species_manager, zeros(sz), heat_cap_CO, visc_CO, therm_cond_CO, M_CO, diffusion_volume_CO, tol_sp, rel_fact_sp, sp_iters);
+co2 = Species("CO2", grid, flow, species_manager, zeros(sz), heat_cap_CO2, visc_CO2, therm_cond_CO2, M_CO2, diffusion_volume_CO2, tol_sp, rel_fact_sp, sp_iters);
+ch4 = Species("CH4", grid, flow, species_manager, M_CH4/(M_CH4+SC*M_H2O) * ones(sz), heat_cap_CH4, visc_CH4, therm_cond_CH4, M_CH4, diffusion_volume_CH4, tol_sp, rel_fact_sp, sp_iters);
+h2o = Species("H2O", grid, flow, species_manager, SC*M_H2O/(M_CH4+SC*M_H2O) * ones(sz), heat_cap_H2O, visc_H2O, therm_cond_H2O, M_H2O, diffusion_volume_H2O, tol_sp, rel_fact_sp, sp_iters);
 
-species_manager.add_species("H2", h2);
-species_manager.add_species("CO", co);
-species_manager.add_species("CO2", co2);
-species_manager.add_species("CH4", ch4);
-species_manager.add_species("H2O", h2o);
-
-properties_manager = ThermophysicalProperties(grid, flow, energy, species_manager);
+properties_manager = ThermophysicalProperties(grid, flow, energy, species_manager, 20);
 species_manager.D_f = @properties_manager.D_function;
 
 species_manager.update_properties();
@@ -151,7 +145,7 @@ ch4.species_bds.add_boundary(wall_and_outlet_all);
 h2o.species_bds.add_boundary(inlet_h2o);
 h2o.species_bds.add_boundary(wall_and_outlet_all);
 
-species_manager.normalize = false;
+
 names = ["H2", "CO", "CO2", "CH4", "H2O"];
 a = false;
 while ~a
@@ -163,9 +157,6 @@ while ~a
             fprintf('The %s residual is equal to: %d\n', names(i), res_hist(species_manager.noi));
         end
     end
-    % if species_manager.noi == 200
-    %     species_manager.normalize = false;
-    % end
 end
 
 species_list = values(species_manager.species);

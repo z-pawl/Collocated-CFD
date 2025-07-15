@@ -1,18 +1,18 @@
 offset_R = 1e-30;
-delta_R = 1;
-L = 1;
+delta_R = 0.05;
+L = 0.3;
 
-sz = [30 30];
+sz = [60 10];
 
 dx = L * ones(sz(1),1) / sz(1);
 dr = delta_R * ones(1,sz(2)) / sz(2);
 
 grid = Grid2D(dx, dr, offset_R);
 
-flow = FlowComponent(grid, zeros(sz), zeros(sz), zeros(sz), 1, @(x) ones(sz), @(x) ones(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-7, 1e-7, 0.7, 0.25, 1, 1, 70);
+flow = FlowComponent(grid, zeros(sz), zeros(sz), zeros(sz), 1, @(x) 1 * ones(sz), @(x) 1 * ones(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-7, 1e-7, 0.7, 0.3, 1, 3, 70);
 
 % Boundary conditions
-inlet_vx = FixedValueBoundary("Inlet vx", grid, 5);
+inlet_vx = FixedValueBoundary("Inlet vx", grid, 0.01);
 inlet_vr = FixedValueBoundary("Inlet vr", grid, 0);
 inlet_p = FixedNormalDerivativeBoundary("Inlet p", grid, 0);
 
@@ -79,6 +79,21 @@ flow.p_bds.add_boundary(wall_p);
 
 flow.convert_pressure_bd_conditions();
 
+% Źródła komponentu prędkości
+% Liniowy człon źródłowy dla prędkości w kierunku osiowym
+function src_lin_vx = lin_src_vx(flow, permeability, inertia_coefficient)
+    % Człon źródłowy = vx*(-μ/Kp-rho*f/sqrt(Kp)*sqrt(vx^2+vr^2))
+    src_lin_vx = -flow.visc / permeability - flow.rho * inertia_coefficient / sqrt(permeability) .* sqrt(flow.vx .^ 2 + flow.vr .^ 2);
+end
+% Liniowy człon źródlowy dla prędkości w kierunku promieniowym
+function src_lin_vr = lin_src_vr(flow, permeability, inertia_coefficient)
+    % Człon źródłowy = vr*(-μ/Kp-rho*f/sqrt(Kp)*sqrt(vx^2+vr^2))
+    src_lin_vr = -flow.visc / permeability - flow.rho * inertia_coefficient / sqrt(permeability) .* sqrt(flow.vx .^ 2 + flow.vr .^ 2);
+end
+
+% flow.src_linx_function = @() lin_src_vx(flow, 1e-7, 0.088);
+% flow.src_linr_function = @() lin_src_vr(flow, 1e-7, 0.088);
+
 flow.update_properties();
 [coeff_vx, coeff_vr] = flow.get_coefficients_v();
 flow.update_face_velocities(flow.vx, flow.vr, coeff_vx(:,:,1), coeff_vr(:,:,1));
@@ -86,7 +101,7 @@ flow.update_face_velocities(flow.vx, flow.vr, coeff_vx(:,:,1), coeff_vr(:,:,1));
 a = false;
 while ~a
     a = flow.iterate();
-    if mod(flow.noi,10)==0
+    if mod(flow.noi,1)==0
         fprintf('Current iteration: %d \n', flow.noi);
         fprintf('The vx residual is equal to: %d \n', flow.residual_history_vx(flow.noi));
         fprintf('The vr residual is equal to: %d \n', flow.residual_history_vr(flow.noi));

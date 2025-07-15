@@ -63,7 +63,7 @@ classdef ThermophysicalProperties < handle
                         D_AB(i, j) = Inf;
                     else
                         M_AB = 2 / (1 / M(i) + 1 / M(j)); % [-]
-                        sigma = (V_D(i)^(1/3) + V_D(j)^(1/3))^2; % [?]
+                        sigma = (V_D(i)^(1/3) + V_D(j)^(1/3))^2; [?]
                         D_AB(i, j) = C / (sqrt(M_AB) * sigma);
                     end
                 end
@@ -73,7 +73,7 @@ classdef ThermophysicalProperties < handle
         end
 
         % Function used to calculate phi used in the mixture dynamic
-        % viscosity formula. Phi is calculated using the method of Herning and Zipperer [-]
+        % viscosity formula. Phi is calculated using the method of Herning and Zippere [-]
         function calculate_phi_visc(obj)
             species_list = values(obj.species_manager.species); 
             num_species = numel(species_list);
