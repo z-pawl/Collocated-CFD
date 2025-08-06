@@ -1,13 +1,9 @@
 -Post processing (generacja entropii)
--Próba symulacji
-    -> Symulacja całego reformera
-        -> Prędkość na wlocie jest błędna (2 razy mniejsza niż powinna)
-        -> Kompletnie inne wyniki niż w artykule - możliwe, że moje i tak są poprawne
--Zmiana rezyduów ciśnienia na rezyduów równania ciągłości
+
+
+-Należy utworzyć nową klasę warunków brzegowych - do warunku brzegowego ciśnienia na wlocie (zgodnie z prawem Darcy'ego-Forchheimer'a) trzeba pobierać informacje z pobliskiej komórki
+-Zaimplementować stary sposób wyznaczania tempa reakcji WGS (skip póki co)
 -Dodać nowy solver (może BiCGSTAB)
--Zaimplementować równania chemiczne
-    -> pozostał jeszcze stary sposób (skip póki co)
-    -> Modyfikacja tempa reakcji w zależności od konieczności clippingu (jak???) - chyba i tak nie ma problemów
 
 
 Dalsze plany:

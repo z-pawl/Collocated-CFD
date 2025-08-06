@@ -45,7 +45,7 @@ classdef ThermophysicalProperties < handle
             num_species = numel(species_list);
         
             % Preallocate diffusivity matrix
-            D_AB = zeros(num_species);
+            D_AB_temp = zeros(num_species);
         
             % Precompute properties
             M = zeros(num_species, 1);      % Molar masses [g/mol]
@@ -60,16 +60,16 @@ classdef ThermophysicalProperties < handle
             for i = 1:num_species
                 for j = 1:num_species
                     if i == j
-                        D_AB(i, j) = Inf;
+                        D_AB_temp(i, j) = Inf;
                     else
                         M_AB = 2 / (1 / M(i) + 1 / M(j)); % [-]
                         sigma = (V_D(i)^(1/3) + V_D(j)^(1/3))^2; % [?]
-                        D_AB(i, j) = C / (sqrt(M_AB) * sigma);
+                        D_AB_temp(i, j) = C / (sqrt(M_AB) * sigma);
                     end
                 end
             end
         
-            obj.D_AB = D_AB;
+            obj.D_AB = D_AB_temp;
         end
 
         % Function used to calculate phi used in the mixture dynamic
@@ -106,11 +106,12 @@ classdef ThermophysicalProperties < handle
         
             % Precompute molar fractions
             M_mix = obj.species_manager.M_mix; % Mixture molar mass [g/mol]
+            Y_tot = obj.species_manager.Y_total; % Sum of mass fractions [-]
             molar_fractions = cell(num_species,1); % Molar fractions [-]
             
             for i = 1:num_species
                 sp = species_list(i);
-                molar_fractions{i} = sp.Y .* M_mix ./ sp.M; % [-]
+                molar_fractions{i} = (sp.Y ./ Y_tot) .* M_mix ./ sp.M; % [-]
             end
         
             % Allocate output map for diffusivities
@@ -135,7 +136,7 @@ classdef ThermophysicalProperties < handle
         
                 D_i = (T .^ 1.75) ./ (P * PA_TO_BAR) ./ D_mix_inv;
                 D_i = D_i * CM2S_TO_M2S;  % Convert to m²/s
-                D_i = (1 - sqrt(1 - obj.flow.porosity)) * D_i; % Calculating the effective diffusivity [m^2/s]
+                D_i = (1 - sqrt(1 - obj.flow.porosity)) .* D_i; % Calculating the effective diffusivity [m^2/s]
                 D(name_i) = D_i;
             end
         end
@@ -158,6 +159,7 @@ classdef ThermophysicalProperties < handle
             
             T = obj.energy.temp;  % Temperature field [K]
             M_mix = obj.species_manager.M_mix; % [g/mol]
+            Y_tot = obj.species_manager.Y_total; % Sum of mass fractions [-]
         
             % Preallocate arrays
             cp = zeros(size(T));
@@ -166,7 +168,7 @@ classdef ThermophysicalProperties < handle
                 sp = species_list(i);
                 
                 % Molar fraction: Y * M_mix / M_i, [-]
-                X_i = sp.Y .* M_mix ./ sp.M;
+                X_i = (sp.Y ./ Y_tot) .* M_mix ./ sp.M;
                 
                 % Molar heat capacity [J/(mol*K)]
                 cp_i = polyval(sp.Cp, T);
@@ -196,6 +198,7 @@ classdef ThermophysicalProperties < handle
 
             T = obj.energy.temp;  % Temperature field [K]
             M_mix = obj.species_manager.M_mix; % Mixture molar mass [g/mol]
+            Y_tot = obj.species_manager.Y_total; % Sum of mass fractions [-]
             sz = size(T);
 
             % Preallocating the arrays
@@ -209,7 +212,7 @@ classdef ThermophysicalProperties < handle
                 sp = species_list(i);
                 
                 % Molar fraction: Y * M_mix / M_i [-]
-                X_i{i} = sp.Y .* M_mix ./ sp.M;
+                X_i{i} = (sp.Y ./ Y_tot) .* M_mix ./ sp.M;
                 
                 % Dynamic viscosity [Pa*s]
                 visc_i{i} = polyval(sp.visc, T);
@@ -228,7 +231,7 @@ classdef ThermophysicalProperties < handle
             end
 
             % Calculating the effective thermal conductivity [W/(m*K)]
-            k = k * obj.flow.porosity + obj.solid_phase_thermal_conductivity * (1 - obj.flow.porosity);
+            k = k .* obj.flow.porosity + obj.solid_phase_thermal_conductivity * (1 - obj.flow.porosity);
         end
     
         % Function used to calculate the dynamic viscosity [Pa*s]
@@ -239,6 +242,7 @@ classdef ThermophysicalProperties < handle
 
             T = obj.energy.temp;  % Temperature field [K]
             M_mix = obj.species_manager.M_mix; % Mixture molar mass [g/mol]
+            Y_tot = obj.species_manager.Y_total; % Sum of mass fractions [-]
             sz = size(T);
 
             % Preallocating the arrays
@@ -251,7 +255,7 @@ classdef ThermophysicalProperties < handle
                 sp = species_list(i);
                 
                 % Molar fraction: Y * M_mix / M_i [-]
-                X_i{i} = sp.Y .* M_mix ./ sp.M;
+                X_i{i} = (sp.Y ./ Y_tot) .* M_mix ./ sp.M;
                 
                 % Pure substance dynamic viscosity [Pa*s]
                 visc_i{i} = polyval(sp.visc, T);

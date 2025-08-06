@@ -4,16 +4,15 @@ function entropy_generation = entropy_generation_heat_transfer(grid, energy_comp
         energy_component EnergyComponent
     end
 
-    % Partial derivatives at faces
-    [coeffs_part_der_x, coeff_part_der_r] = central_differencing_scheme(grid, energy_component.temp_bds);
-    [part_der_at_faces_x, part_der_at_faces_r] = evaluate_faces(coeffs_part_der_x, coeff_part_der_r, energy_component.temp);
+    % Partial derivatives of temperature at faces [K/m]
+    [coeffs_der_T_x, coeffs_der_T_r] = central_differencing_scheme(grid);
+    [coeffs_der_T_x, coeffs_der_T_r] = energy_component.temp_bds.apply_boundary_condition_normal_derivative(coeffs_der_T_x, coeffs_der_T_r);
+    [der_T_x, der_T_r] = evaluate_faces(coeffs_der_T_x, coeffs_der_T_r, energy_component.temp);
 
-    % Temperature gradient at cell centers
-    temp_grad_x = grid.face_area_x(2:end,:) .* part_der_at_faces_x(2:end,:) - grid.face_area_x(1:end-1,:) .* part_der_at_faces_x(1:end-1,:);
-    temp_grad_r = grid.face_area_r(:,2:end) .* part_der_at_faces_r(:,2:end) - grid.face_area_r(:,1:end-1) .* part_der_at_faces_r(:,1:end-1);
+    % Temperature gradient at cell centers [K/m]
+    gradient_T_x = (der_T_x(1:end-1,:) + der_T_x(2:end,:)) / 2;
+    gradient_T_r = (der_T_r(:,1:end-1) + der_T_r(:,2:end)) / 2;
 
-    clear coeffs_part_der_x coeff_part_der_r part_der_at_faces_x part_der_at_faces_r;
-
-    % S_gen = q * grad(1/T) = -k * grad(T) * grad(1/T) = k * grad(T)^2 / T^2
-    entropy_generation = energy_component.k .* (temp_grad_x .^ 2 + temp_grad_r .^ 2) ./ (energy_component.temp .^ 2);
+    % S_gen_local = -q * grad(T) / T ^ 2 = k * grad(T) ^ 2 / T ^ 2 = k * grad(T)^2 / T^2
+    entropy_generation = energy_component.k .* (gradient_T_x .^ 2 + gradient_T_r .^ 2) ./ (energy_component.temp .^ 2);
 end

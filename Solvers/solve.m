@@ -1,6 +1,6 @@
 function field = solve(coeff, field, num_of_iters, sweep_dirs, relax_factor)
-    sz=size(field);
-    sweep_dirs_len=numel(sweep_dirs);
+    sz = size(field);
+    sweep_dirs_len = numel(sweep_dirs);
 
     % The system of equation is solved iteratively num_of_iters number of times
     for s=1:num_of_iters
@@ -64,7 +64,7 @@ function field = solve(coeff, field, num_of_iters, sweep_dirs, relax_factor)
                     end
                 end
             case 4
-                for i=1:sz(1)
+                for i=sz(1):-1:1
                     % Calculating the right hand side of the equation
                     rhs=coeff(i,:,6);
 

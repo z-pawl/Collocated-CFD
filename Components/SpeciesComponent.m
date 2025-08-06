@@ -1,4 +1,4 @@
-classdef Species < handle
+classdef SpeciesComponent < handle
     properties
         name (1,1) string           % Species name
 
@@ -36,7 +36,7 @@ classdef Species < handle
         Jr (:,:) double                                 % Diffusive flux in the r direction [kg/s]
     end
     methods
-        function obj = Species(name, grid, flow, species_manager, Y, Cp, visc, k, M, V_D, tol, relaxation_factor, solver_iters)
+        function obj = SpeciesComponent(name, grid, flow, species_manager, Y, Cp, visc, k, M, V_D, tol, relaxation_factor, solver_iters)
             arguments
                 name (1,1) string               % Name of the species
                 grid (1,1) Grid2D
@@ -147,7 +147,7 @@ classdef Species < handle
             coeff = obj.get_coefficients();
 
             % Solving the system of equations and updating the field using the relaxation factor
-            obj.Y = obj.Y + obj.relaxation_factor * (solve(coeff, obj.Y, obj.solver_iters, [1; 2; 3; 4], 1) - obj.Y);
+            obj.Y = obj.Y + obj.relaxation_factor * (solve(coeff, obj.Y, obj.solver_iters, [1; 3; 2; 4], 1) - obj.Y);
             
 
             % Updating the aP, Jx and Jr values used by the species manager

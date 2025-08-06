@@ -9,9 +9,9 @@ inertia_coefficient = 0.088;
 solid_phase_thermal_conductivity = 20.0;
 catalyst_density = 2.5e5;
 
-temp_inlet = 800;
+temp_inlet = 1200;
 v_inlet = 1;
-temp_wall = 800;
+temp_wall = 1200;
 p_atm = 101325;
 SC = 2;
 
@@ -87,7 +87,7 @@ grid = Grid2D(dx, dr, offset);
 flow = FlowComponent(grid, v_inlet*ones(sz), zeros(sz), p_atm * ones(sz), 1, @(x) ones(sz), @(x) ones(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-6, 1e-6, 0.55, 0.2, 1, 1, 30);
 flow.vx_faces = v_inlet*ones(sz + [1 0]);
 flow.vr_faces = zeros(sz + [0 1]);
-energy = EnergyComponent(grid, flow, 1200*ones(sz), @(x) ones(sz), @(x) ones(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-9, 1, 5, 30);
+energy = EnergyComponent(grid, flow, temp_inlet*ones(sz), @(x) ones(sz), @(x) ones(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-9, 1, 5, 30);
 
 species_manager = SpeciesManagerComponent(grid, flow, energy, @(x) 0, a, b, A_st, E_a, delta_G, catalyst_density, rel_fact_R_st, rel_fact_R_sh, inner_iters);
 h2 = Species("H2", grid, flow, species_manager, zeros(sz), heat_cap_H2, visc_H2, therm_cond_H2, M_H2, diffusion_volume_H2, tol_sp, rel_fact_sp, sp_iters);

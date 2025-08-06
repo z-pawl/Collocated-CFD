@@ -54,7 +54,7 @@ classdef FlowComponent < IComponent
 
         % Solver settings
         tol_v (1,1) double {mustBeNonnegative}          % Convergence criteria for velocity
-        tol_p (1,1) double {mustBeNonnegative}          % Convergence criteria for pressure
+        tol_cont (1,1) double {mustBeNonnegative}       % Convergence criteria for continuity
         relaxation_factor_v (1,1) double                % Velocity relaxation factor
         relaxation_factor_p (1,1) double                % Pressure relaxation factor
         implicit_relaxation_factor_v (1,1) double = 0.9 % Implicit relaxation factor for velocity to ensure diagonal dominance
@@ -63,16 +63,18 @@ classdef FlowComponent < IComponent
         solver_iters_p (1,1)                            % Number of pressure solver iterations per inner iteration
         residual_history_vx (:,1) double                % X component of velocity residual history
         residual_history_vr (:,1) double                % R component of velocity residual history
-        residual_history_p (:,1) double                 % Pressure residual history
+        residual_history_continuity (:,1) double        % Continuity residual history
+        m (1,1) double = 3                              % Number of initial iterations to monitor continuity residual
+        max_continuity_residual (1,1) double            % Maximum unscaled continuity residual during first m iterations
     end
     methods
-        function obj = FlowComponent(grid, vx, vr, p, porosity, rho_function, visc_function, srcx_function, src_linx_function, srcr_function, src_linr_function, tol_v, tol_p, relaxation_factor_v, relaxation_factor_p, inner_iters, solver_iters_v, solver_iters_p)
+        function obj = FlowComponent(grid, vx, vr, p, porosity, rho_function, visc_function, srcx_function, src_linx_function, srcr_function, src_linr_function, tol_v, tol_cont, relaxation_factor_v, relaxation_factor_p, inner_iters, solver_iters_v, solver_iters_p)
             arguments
                 grid (1,1) Grid2D
                 vx (:,:) double     % Initial x-component velocity [m/s]
                 vr (:,:) double     % Initial r-component velocity field [m/s]
                 p  (:,:) double     % Initial pressure field [Pa]
-                porosity double     % Porosity [-]
+                porosity (:,:) double     % Porosity [-]
                 rho_function (1,1) function_handle
                 visc_function (1,1) function_handle
                 srcx_function (1,1) function_handle
@@ -80,7 +82,7 @@ classdef FlowComponent < IComponent
                 srcr_function (1,1) function_handle
                 src_linr_function (1,1) function_handle
                 tol_v (1,1) double
-                tol_p (1,1) double
+                tol_cont (1,1) double
                 relaxation_factor_v (1,1) double 
                 relaxation_factor_p (1,1) double
                 inner_iters (1,1)
@@ -119,7 +121,7 @@ classdef FlowComponent < IComponent
             obj.p_corr_bds = Boundaries;
 
             obj.tol_v = tol_v;
-            obj.tol_p = tol_p;
+            obj.tol_cont = tol_cont;
             obj.relaxation_factor_v = relaxation_factor_v;
             obj.relaxation_factor_p = relaxation_factor_p;
             obj.inner_iters = inner_iters;
@@ -127,7 +129,7 @@ classdef FlowComponent < IComponent
             obj.solver_iters_p = solver_iters_p;
             obj.residual_history_vx = zeros(10000,1);
             obj.residual_history_vr = zeros(10000,1);
-            obj.residual_history_p = zeros(10000,1);
+            obj.residual_history_continuity = zeros(10000,1);
 
             % Geometric term dependence
             % The radial velocity profile is approximated using a quadratic
@@ -190,16 +192,18 @@ classdef FlowComponent < IComponent
             [rho_x, rho_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.rho);
             % Dynamic viscosity [Pa*s]
             [visc_x, visc_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.visc);
+            % Porosity [-]
+            [porosity_x, porosity_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.porosity);
 
             clear lin_int_coeffs_x lin_int_coeffs_r
 
             % F = rho * v * A / porosity ^ 2 [kg/s]
-            Fx = rho_x .* obj.vx_faces .* obj.grid.face_area_x / obj.porosity .^ 2;
-            Fr = rho_r .* obj.vr_faces .* obj.grid.face_area_r / obj.porosity .^ 2;
+            Fx = rho_x .* obj.vx_faces .* obj.grid.face_area_x ./ porosity_x .^ 2;
+            Fr = rho_r .* obj.vr_faces .* obj.grid.face_area_r ./ porosity_r .^ 2;
 
             % D = visc * A / porosity [kg*m/s]
-            Dx = visc_x .* obj.grid.face_area_x / obj.porosity;
-            Dr = visc_r .* obj.grid.face_area_r / obj.porosity;
+            Dx = visc_x .* obj.grid.face_area_x ./ porosity_x;
+            Dr = visc_r .* obj.grid.face_area_r ./ porosity_r;
 
             clear rho_x rho_r visc_x visc_r;
 
@@ -282,7 +286,7 @@ classdef FlowComponent < IComponent
         
             % Additional geometric term
             [~, vr_at_r_faces] = evaluate_faces(coeffs_x_vr_deferred, coeffs_r_vr_deferred, obj.vr); % [m/s]
-            geom_term = obj.visc / obj.porosity ...
+            geom_term = obj.visc ./ obj.porosity ...
                 .* (obj.geom_term_dep_s .* vr_at_r_faces(:,1:end-1) ...
                 + obj.geom_term_dep_n .* vr_at_r_faces(:,2:end) ...
                 + obj.geom_term_dep_P .* obj.vr); % [N]=[kg*m/s^2]
@@ -346,8 +350,8 @@ classdef FlowComponent < IComponent
                 [coeff_vx, coeff_vr] = obj.get_coefficients_v();
 
                 % Calculating the intermediate velocities [m/s]
-                vx_star=solve(coeff_vx, obj.vx, obj.solver_iters_v, randi([1 4]), obj.relaxation_factor_v);
-                vr_star=solve(coeff_vr, obj.vr, obj.solver_iters_v, randi([1 4]), obj.relaxation_factor_v);
+                vx_star=solve(coeff_vx, obj.vx, obj.solver_iters_v, randi([1 4], [4 1]), obj.relaxation_factor_v);
+                vr_star=solve(coeff_vr, obj.vr, obj.solver_iters_v, randi([1 4], [4 1]), obj.relaxation_factor_v);
 
                 % Calculating the unrelaxed central coefficients used to
                 % calculate rhie chow correction and the pressure correction [kg/s]
@@ -360,7 +364,7 @@ classdef FlowComponent < IComponent
                 % Calculating the coefficients of the pressure correction equation and solving it
                 coeff_p_corr = obj.get_coefficients_p_corr(coeff_vx_unrelaxed, coeff_vr_unrelaxed);
 
-                p_corr = solve(coeff_p_corr, zeros(obj.grid.sz), obj.solver_iters_p, [1;2;3;4], 1); % [Pa]
+                p_corr = solve(coeff_p_corr, zeros(obj.grid.sz), obj.solver_iters_p, [1;3;2;4], 1); % [Pa]
 
                 % Calculating the pressure force from the pressure correction and using it to correct the velocities
                 % Coefficients for pressure interpolation
@@ -399,13 +403,26 @@ classdef FlowComponent < IComponent
 
             res_vx = calculate_residual(coeff_vx, obj.vx);
             res_vr = calculate_residual(coeff_vr, obj.vr);
-            res_p = norm(calculate_local_residual(coeff_p_corr, zeros(obj.grid.sz)),1) / norm(coeff_p_corr(:,:,1) .* obj.p, 1);
-            
+
+            % The density has to interpolated in order to calculate the mass
+            % creation rate in each cell
+            [coeff_lin_x, coeff_lin_r] = linear_interpolation_scheme(obj.grid);
+            [coeff_lin_x, coeff_lin_r] = obj.grid.domain_boundary.apply_boundary_condition_value(coeff_lin_x, coeff_lin_r);
+            [rho_x, rho_r] = evaluate_faces(coeff_lin_x, coeff_lin_r, obj.rho);
+            mass_flux_x = rho_x .* obj.grid.face_area_x .* obj.vx_faces;
+            mass_flux_r = rho_r .* obj.grid.face_area_r .* obj.vr_faces;
+
+            res_continuity = norm((mass_flux_x(2:end,:) - mass_flux_x(1:end-1,:)) + (mass_flux_r(:,2:end) - mass_flux_r(:,1:end-1)), 1);
+            if obj.noi <= obj.m
+                obj.max_continuity_residual = max([obj.max_continuity_residual res_continuity]);
+            end
+            res_continuity = res_continuity / obj.max_continuity_residual;
+
             obj.residual_history_vx(obj.noi) = res_vx;
             obj.residual_history_vr(obj.noi) = res_vr;
-            obj.residual_history_p(obj.noi) = res_p;
+            obj.residual_history_continuity(obj.noi) = res_continuity;
             
-            converged = (res_vx < obj.tol_v) && (res_vr < obj.tol_v) && (res_p < obj.tol_p);
+            converged = (res_vx < obj.tol_v) && (res_vr < obj.tol_v) && (res_continuity < obj.tol_cont);
         end
     end
 end

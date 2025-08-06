@@ -147,7 +147,7 @@ classdef EnergyComponent < IComponent
                 coeff = obj.get_coefficients();
     
                 % Solving the system of equations and updating the field using the relaxation factor
-                obj.temp = obj.temp + obj.relaxation_factor * (solve(coeff, obj.temp, obj.solver_iters, [1; 2; 3; 4], 1) - obj.temp);
+                obj.temp = obj.temp + obj.relaxation_factor * (solve(coeff, obj.temp, obj.solver_iters, [1; 3; 2; 4], 1) - obj.temp);
             end
 
             % Updating properties

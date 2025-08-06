@@ -9,12 +9,13 @@ dr = delta_R * ones(1,sz(2)) / sz(2);
 
 grid = Grid2D(dx, dr, offset_R);
 
-flow = FlowComponent(grid, zeros(sz), zeros(sz), zeros(sz), 1, @(x) 1 * ones(sz), @(x) 1 * ones(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-7, 1e-7, 0.7, 0.3, 1, 3, 70);
+flow = FlowComponent(grid, zeros(sz), zeros(sz), zeros(sz), 1, @(x) 1 * ones(sz), @(x) 1 * ones(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-7, 1e-7, 0.7, 0.3, 1, 1, 70);
 
 % Boundary conditions
 inlet_vx = FixedValueBoundary("Inlet vx", grid, 0.01);
 inlet_vr = FixedValueBoundary("Inlet vr", grid, 0);
 inlet_p = FixedNormalDerivativeBoundary("Inlet p", grid, 0);
+% inlet_p = FixedNormalDerivativeBoundary("Inlet p", grid, 0.01*(-1 / 1e-7 - 1 * 0.088 / sqrt(1e-7) .* sqrt(0.01 .^ 2))); % Use with the additional source terms
 
 outlet_vx = FixedNormalDerivativeBoundary("Outlet vx", grid, 0);
 outlet_vr = FixedNormalDerivativeBoundary("Outlet vr", grid, 0);
@@ -105,7 +106,7 @@ while ~a
         fprintf('Current iteration: %d \n', flow.noi);
         fprintf('The vx residual is equal to: %d \n', flow.residual_history_vx(flow.noi));
         fprintf('The vr residual is equal to: %d \n', flow.residual_history_vr(flow.noi));
-        fprintf('The p residual is equal to: %d \n', flow.residual_history_p(flow.noi));
+        fprintf('The continuity residual is equal to: %d \n', flow.residual_history_continuity(flow.noi));
     end
 end
 
@@ -144,4 +145,4 @@ figure(6);
 semilogy(flow.residual_history_vx(1:flow.noi),'DisplayName','vx residual');
 hold on;
 semilogy(flow.residual_history_vr(1:flow.noi),'DisplayName','vr residual');
-semilogy(flow.residual_history_p(1:flow.noi),'DisplayName','p residual');
+semilogy(flow.residual_history_continuity(1:flow.noi),'DisplayName','continuity residual');

@@ -23,10 +23,13 @@ classdef SpeciesManagerComponent < IComponent
         A_st double                             % Arrhenius constant of the methane steam reforming reaction [mol/(g*s*Pa^(a+b))]
         E_a double                              % Activation energy of the methane steam reforming reaction [J/mol]
         delta_G double                          % Change of standard Gibbs free energy of water-gas-shift reaction [J/mol]
-        w_cat double                            % Catalyst density [g/m^3]
+        delta_G_f double = [-9.567496942495305e-10, 6.090518653514345e-06, -0.017527727943031, 52.367574548268806, -4.299681949526121e+04]
+                                                % Function (polynomial) of change of the standard free energy of the water-gas-shift-reaction [J/mol] in terms of temperature [K]
+        w_cat (:,:) double                      % Catalyst density [g/m^3]
 
         Jx_sum (:,:) double                     % Sum of diffusive fluxes in the x direction for all species [kg/s]  
         Jr_sum (:,:) double                     % Sum of diffusive fluxes in the r direction for all species [kg/s]
+        urf_J_sum (1,1) double = 0.0001         % Underrelaxation factor used to update the sum of diffusive fluxes
 
         % Solver settings
         relaxation_factor_R_st (1,1) double     % Relaxation factor of the steam-methane reforming reaction rate
@@ -36,7 +39,7 @@ classdef SpeciesManagerComponent < IComponent
     end
     methods
         % Constructor
-        function obj = SpeciesManagerComponent(grid, flow, energy, D_function, a, b, A_st, E_a, delta_G, w_cat, relaxation_factor_R_st, relaxation_factor_R_sh, inner_iters)
+        function obj = SpeciesManagerComponent(grid, flow, energy, D_function, a, b, A_st, E_a, w_cat, relaxation_factor_R_st, relaxation_factor_R_sh, inner_iters)
             arguments
                 grid (1,1) Grid2D
                 flow (1,1) FlowComponent
@@ -46,8 +49,7 @@ classdef SpeciesManagerComponent < IComponent
                 b (1,1) double                          % Rate of steam-methane reforming reaction with respect to water [-]
                 A_st (1,1) double                       % Arrhenius constant [mol/(g*s*Pa^(a+b))]
                 E_a (1,1) double                        % Activation energy [J/mol]
-                delta_G (1,1) double                    % Change of standard Gibbs free energy of water-gas-shift reaction [J/mol]
-                w_cat (1,1) double                      % Catalyst density [g/m^3]
+                w_cat (:,:) double                      % Catalyst density [g/m^3]
                 relaxation_factor_R_st (1,1) double     % Relaxation factor of the steam-methane reforming reaction rate
                 relaxation_factor_R_sh (1,1) double     % Relaxation factor of the water-gas-shift reaction rate
                 inner_iters (1,1) double                % Number of inner iterations per outer iteration
@@ -71,7 +73,6 @@ classdef SpeciesManagerComponent < IComponent
             obj.b = b;
             obj.A_st = A_st;
             obj.E_a = E_a;
-            obj.delta_G = delta_G;
             obj.w_cat = w_cat;
             
             obj.Jx_sum = zeros(grid.sz + [1 0]);
@@ -88,7 +89,7 @@ classdef SpeciesManagerComponent < IComponent
             arguments
                 obj (1,1) SpeciesManagerComponent
                 name (1,1) string
-                species (1,1) Species
+                species (1,1) SpeciesComponent
             end
             obj.species(name) = species;
             obj.residual_history(name) = zeros([max([obj.noi 10000]) 1]);
@@ -101,6 +102,12 @@ classdef SpeciesManagerComponent < IComponent
             species_components = values(obj.species);
             n_species = numel(species_components);
 
+            obj.delta_G = polyval(obj.delta_G_f, obj.energy.temp);
+
+            % The water gas shift reaction is updated before clipping the
+            % mass fractions
+            obj.update_wgs_reaction_rate();
+
             % Sum of mass fractions [-]
             Y_total_new = zeros(obj.grid.sz);
             % Molar mass of the mixture [g/mol]
@@ -112,7 +119,9 @@ classdef SpeciesManagerComponent < IComponent
             Jr_sum_new = zeros(obj.grid.sz + [0 1]);
 
             for i = 1:n_species
-                % Clipping the negative mass fractions
+                % Clipping the negative mass fractions - negative values
+                % cause complex numbers to appear when updating the SMR
+                % reaction rate and calculating physical properties
                 species_components(i).Y = clip(species_components(i).Y, 0, Inf);
 
                 Y_total_new = Y_total_new + species_components(i).Y;
@@ -137,13 +146,13 @@ classdef SpeciesManagerComponent < IComponent
             obj.Y_total = Y_total_new;
             obj.M_mix = M_mix_new;
 
-            % % Updating the sum of diffusive fluxes of all species used by 
-            % % the mass correction term for Fick's law based diffusion
-            % obj.Jx_sum = Jx_sum_new;
-            % obj.Jr_sum = Jr_sum_new;
+            % Updating the sum of diffusive fluxes of all species used by 
+            % the mass correction term for Fick's law based diffusion
+            obj.Jx_sum = obj.Jx_sum + obj.urf_J_sum * (Jx_sum_new - obj.Jx_sum);
+            obj.Jr_sum = obj.Jr_sum + obj.urf_J_sum * (Jr_sum_new - obj.Jr_sum);
 
             obj.update_species_diffusivity();
-            obj.update_reaction_rates();
+            obj.update_smr_reaction_rate();
             obj.update_source_terms();
         end
 
@@ -159,29 +168,11 @@ classdef SpeciesManagerComponent < IComponent
             end
         end
 
-        % Updates reaction rates of chemical reactions
-        % SMR - rate is calculated using an empirical formula
-        % WGS - rate is calculated assuming that the reaction is always in
-        % equilibrium
-        function update_reaction_rates(obj)            
+        % Updates SMR reaction rate
+        % Rate is calculated using an empirical formula
+        function update_smr_reaction_rate(obj)            
             ch4_component = obj.species("CH4");
             h2o_component = obj.species("H2O");
-            h2_component = obj.species("H2");
-            co_component = obj.species("CO");
-            co2_component = obj.species("CO2");
-
-            % Correction: Y = Y* + b * v * R; b = volume * M / aP
-            % Y - mass fraction [-], v - stoichiometric coefficient [-]
-            % R - reaction rate [mol/(m^3*s)]
-            % b [m^3*s/mol], volume [m^3], M - molar mass [kg/mol]
-            % aP - central coefficient of the discretized transport equation of the species [kg/s]
-            % Molar mass has to be divided by 1000 as its units are g/mol
-            g_TO_kg = 1 / 1000;
-            b_ch4 = obj.grid.volume * (ch4_component.M * g_TO_kg) ./ ch4_component.aP;
-            b_h2o = obj.grid.volume * (h2o_component.M * g_TO_kg) ./ h2o_component.aP;
-            b_h2 = obj.grid.volume * (h2_component.M * g_TO_kg) ./ h2_component.aP;
-            b_co = obj.grid.volume * (co_component.M * g_TO_kg) ./ co_component.aP;
-            b_co2 = obj.grid.volume * (co2_component.M * g_TO_kg) ./ co2_component.aP;
 
             % The methane steam reforming reaction rate is calculated explicitly
             % R_st = w_cat * A_st * exp(-E_a/(R*T)) * p_ch4^a * p_h2o^b [mol/(m^3*s)]
@@ -197,7 +188,27 @@ classdef SpeciesManagerComponent < IComponent
             % updated using the underrelaxation factor
             R_st_corr = G .* ch4_component.Y .^ obj.a .* h2o_component.Y .^ obj.b ./ obj.Y_total .^ (obj.a + obj.b) - obj.R_st;
             obj.R_st = obj.R_st + obj.relaxation_factor_R_st * R_st_corr;
+        end
         
+        % Updates WGS reaction rate
+        % Rate is calculated assuming that the reaction is always in equilibrium
+        function update_wgs_reaction_rate(obj)
+            h2o_component = obj.species("H2O");
+            h2_component = obj.species("H2");
+            co_component = obj.species("CO");
+            co2_component = obj.species("CO2");
+
+            % Correction: Y = Y* + b * v * R; b = volume * M / aP
+            % Y - mass fraction [-], v - stoichiometric coefficient [-]
+            % R - reaction rate [mol/(m^3*s)]
+            % b [m^3*s/mol], volume [m^3], M - molar mass [kg/mol]
+            % aP - central coefficient of the discretized transport equation of the species [kg/s]
+            % Molar mass has to be divided by 1000 as its units are g/mol
+            g_TO_kg = 1 / 1000;
+            b_h2o = obj.grid.volume * (h2o_component.M * g_TO_kg) ./ h2o_component.aP;
+            b_h2 = obj.grid.volume * (h2_component.M * g_TO_kg) ./ h2_component.aP;
+            b_co = obj.grid.volume * (co_component.M * g_TO_kg) ./ co_component.aP;
+            b_co2 = obj.grid.volume * (co2_component.M * g_TO_kg) ./ co2_component.aP;
 
             % The water-gas-shift reaction rate is calculated using a rate
             % correction approach, the rate is relaxed to prevent oscillations
@@ -218,10 +229,12 @@ classdef SpeciesManagerComponent < IComponent
             C = K_sh .* co_component.Y .*  h2o_component.Y - co2_component.Y .* h2_component.Y; % [-]
 
             B_2A = -B ./ (2 * A); % [mol/(m^3*s)]
-            delta_2A = sqrt(B .* B - 4 * A .* C) ./ (2 * A); % [mol/(m^3*s)]
+            delta_2A = B .* B - 4 * A .* C;
+            pos_delta = delta_2A >= 0; % Logical mask whether delta is positive
+            delta_2A = sqrt(delta_2A .* pos_delta) ./ (2 * A); % [mol/(m^3*s)]
 
             % Updating the reaction rate using the relaxation factor
-            R_sh_corr = B_2A - delta_2A; % [mol/(m^3*s)]
+            R_sh_corr = (B_2A - delta_2A) .* pos_delta; % [mol/(m^3*s)]
             obj.R_sh = obj.R_sh + obj.relaxation_factor_R_sh * R_sh_corr;
             % At least one species from each side of the reaction is
             % missing - the reaction rate is zero
