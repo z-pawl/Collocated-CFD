@@ -5,7 +5,7 @@
 %     [     a ⋱ ⋱ ]
 %     [       ⋱ ⋱ ]
 % b,d - nx1 vectors
-% a,c - nx1 vectors - program will ignore the first and the last element of the vector respectively
+% a,c - nx1 vectors - script will ignore the first and the last element of the vector respectively
 function sol = tdma(a,b,c,d)
 
     % Dimension of the matrix A

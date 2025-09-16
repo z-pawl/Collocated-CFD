@@ -1,9 +1,5 @@
--Post processing (generacja entropii)
-
-
 -Należy utworzyć nową klasę warunków brzegowych - do warunku brzegowego ciśnienia na wlocie (zgodnie z prawem Darcy'ego-Forchheimer'a) trzeba pobierać informacje z pobliskiej komórki
 -Zaimplementować stary sposób wyznaczania tempa reakcji WGS (skip póki co)
--Dodać nowy solver (może BiCGSTAB)
 
 
 Dalsze plany:
