@@ -52,5 +52,6 @@ function entropy_generation = entropy_generation_chemical_reaction(grid, energy_
     delta_G_WGS = delta_G_0_WGS + species_manager.R * energy_component.temp .* log(Q_WGS);
     entropy_generation_wgs = -delta_G_WGS .* species_manager.R_sh ./ energy_component.temp;
 
+    % [W/(m^3*s*K)]
     entropy_generation = (entropy_generation_smr + entropy_generation_wgs);
 end
