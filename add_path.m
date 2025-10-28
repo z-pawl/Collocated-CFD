@@ -1,1 +1,1 @@
-addpath(genpath('D:\AGH\MATLABPROJECT\V2\Collocated-CFD'));
+addpath(genpath(pwd));

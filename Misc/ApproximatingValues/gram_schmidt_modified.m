@@ -48,7 +48,7 @@ function basis = modified_gram_schmidt(basis, p, q)
     fprintf("The calculation took %d iterations\n", noi);
 end
 
-n = 2;
+n = 4;
 p = 0.7;
 q = 1.400;
 
