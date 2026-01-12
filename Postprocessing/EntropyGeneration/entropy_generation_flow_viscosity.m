@@ -1,24 +1,15 @@
-function entropy_generation = entropy_generation_flow_viscosity(grid, energy_component, flow_component)
+function entropy_generation = entropy_generation_flow_viscosity(grid, energy_component, flow_component, permeability)
     arguments
         grid (1,1) Grid2D
         energy_component (1,1) EnergyComponent
         flow_component (1,1) FlowComponent
+        permeability (1,1) double
     end
     % Entropy generation due to flow viscosity in a porous media is
     % described by the following equation:
-    % s_gen = -(v * grad(p)) / T; [W/(m^3*s*K)]
+    % s_gen = visc * v^2 / (Kp * T); [W/(m^3*s*K)]
     % Where: T - temperature [K], v - velocity [m/s]
-    % p - pressure [Pa]
+    % visc - dynamic viscosity [Pa*s], Kp - permeability [m^2]
 
-    % Calculation of the pressure gradient
-    % Pressure at faces
-    [coeff_p_x, coeff_p_r] = linear_interpolation_scheme(grid);
-    [coeff_p_x, coeff_p_r] = flow_component.p_bds.apply_boundary_condition_value(coeff_p_x, coeff_p_r);
-    [p_x, p_r] = evaluate_faces(coeff_p_x, coeff_p_r, flow_component.p); % [Pa]
-
-    % Pressure gradient [Pa/m]
-    grad_p_x = (p_x(2:end,:) - p_x(1:end-1,:)) ./ grid.dx;
-    grad_p_r = (p_r(:,2:end) - p_r(:,1:end-1)) ./ grid.dr;
-
-    entropy_generation = -(flow_component.vx .* grad_p_x + flow_component.vr .* grad_p_r) ./ energy_component.temp;
+    entropy_generation = flow_component.visc .* (flow_component.vx .^ 2 + flow_component.vr .^ 2) ./ (permeability * energy_component.temp);
 end

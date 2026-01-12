@@ -1,4 +1,4 @@
-offset_R = 0;
+offset_R = 1;
 delta_R = 1;
 L = 1;
 
@@ -9,29 +9,55 @@ dr = delta_R * ones(1,sz(2)) / sz(2);
 
 grid = Grid2D(dx, dr, offset_R);
 
-flow = FlowComponent(grid, 5*ones(sz), zeros(sz), zeros(sz), 1, @(x) ones(sz), @(x) ones(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-6, 1e-6, 0.55, 0.2, 1, 1, 30);
-energy = EnergyComponent(grid, flow, zeros(sz), @(x) ones(sz), @(x) ones(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-9, 1, 5, 30);
+rho = 1000; % Density [kg/m^3]
+visc = 1; % Dynamic viscosity [Pa*s]
+
+vx = 0.01; % Velocity in the x direction [m/s]
+vx_field = vx * ones(sz); % Velocity field in the x direction [m/s]
+vr_field = zeros(sz); % Velocity field in the r direction [m/s]
+p = zeros(sz); % Pressure [Pa]
+porosity = ones(sz); % Porosity [-]
+rho_function = @(x) rho * ones(sz); % Density field [kg/m^3]
+visc_function = @(x) visc * ones(sz); % Dynamic viscosity field [Pa*s]
+source_terms_flow = @(x) zeros(sz); % Source terms of the momentum equation - set to zero
+
+T_init = zeros(sz); % Initial temperature field [K]
+k = @(x) ones(sz); % Thermal conductivity [W/(m*K)]
+Cp = @(x) ones(sz); % Heat capacity [J/(kg*K)]
+q = @(x) ones(sz); % Heat source [W/m^3]
+q_t = @(x) zeros(sz); % Linear heat source [W/(m^3*K)]
+rel_fact_T = 0.9; 
+tol_T = 1e-7;
+inner_iters = 1;
+solver_iters = 10;
+
+
+flow = FlowComponent(grid, vx_field, vr_field, p, porosity, rho_function, visc_function, source_terms_flow, source_terms_flow, source_terms_flow, source_terms_flow, 1, 1, 1, 1, 1, 1, 1); % Relaxation factors are set to 1 because the component is never updated
+energy = EnergyComponent(grid, flow, T_init, k, Cp, q, q_t, tol_T, rel_fact_T, inner_iters, solver_iters);
 
 % Boundary conditions
-inlet_vx = FixedValueBoundary("Inlet vx", grid, 5);
+T_inlet_outlet = 100; % Temperature at the inlet and the outlet [K]
+T_outer_wall = 200; % Outer wall temperature [K]
+T_inner_wall = 400; % Inner wall temperature [K]
+inlet_vx = FixedValueBoundary("Inlet vx", grid, vx);
 inlet_vr = FixedValueBoundary("Inlet vr", grid, 0);
 inlet_p = FixedNormalDerivativeBoundary("Inlet p", grid, 0);
-inlet_temp = FixedValueBoundary("Inlet T", grid, 100);
+inlet_temp = FixedValueBoundary("Inlet T", grid, T_inlet_outlet);
 
-outlet_vx = FixedValueBoundary("Outlet vx", grid, 5);
+outlet_vx = FixedValueBoundary("Outlet vx", grid, vx);
 outlet_vr = FixedValueBoundary("Outlet vr", grid, 0);
 outlet_p = FixedNormalDerivativeBoundary("Outlet p", grid, 0);
-outlet_temp = FixedValueBoundary("Outlet T", grid, 100);
+outlet_temp = FixedValueBoundary("Outlet T", grid, T_inlet_outlet);
 
-wall_vx = FixedValueBoundary("Wall vx", grid, 0);
-wall_vr = FixedValueBoundary("Wall vr", grid, 0);
-wall_p = FixedNormalDerivativeBoundary("Wall p", grid, 0);
-wall_temp = FixedValueBoundary("Wall T", grid, 200);
+outer_wall_vx = FixedValueBoundary("Outer wall vx", grid, 0);
+outer_wall_vr = FixedValueBoundary("Outer wall vr", grid, 0);
+outer_wall_p = FixedNormalDerivativeBoundary("Outer wall p", grid, 0);
+outer_wall_temp = FixedValueBoundary("Outer wall T", grid, T_outer_wall);
 
-axis_vx = FixedValueBoundary("Axis vx", grid, 0);
-axis_vr = FixedValueBoundary("Axis vr", grid, 0);
-axis_p = FixedNormalDerivativeBoundary("Axis p", grid, 0);
-axis_temp = FixedValueBoundary("Axis T", grid, 400);
+inner_wall_vx = FixedValueBoundary("Inner wall vx", grid, 0);
+inner_wall_vr = FixedValueBoundary("Inner wall vr", grid, 0);
+inner_wall_p = FixedNormalDerivativeBoundary("Inner wall p", grid, 0);
+inner_wall_temp = FixedValueBoundary("Inner wall T", grid, T_inner_wall);
 
 domain_boundary = FixedNormalDerivativeBoundary("Domain", grid, 0);
 
@@ -54,18 +80,18 @@ end
 
 % Axis
 for i = 1:sz(1)
-    % Axis
-    axis_vx.add_boundary_face("r", [i 1], 1);
-    axis_vr.add_boundary_face("r", [i 1], 1);
-    axis_p.add_boundary_face("r", [i 1], 1);
-    axis_temp.add_boundary_face("r", [i 1], 1);
+    % Inner wall
+    inner_wall_vx.add_boundary_face("r", [i 1], 1);
+    inner_wall_vr.add_boundary_face("r", [i 1], 1);
+    inner_wall_p.add_boundary_face("r", [i 1], 1);
+    inner_wall_temp.add_boundary_face("r", [i 1], 1);
     domain_boundary.add_boundary_face("r", [i 1], 1);
 
-    % Wall
-    wall_vx.add_boundary_face("r", [i sz(2)+1], -1);
-    wall_vr.add_boundary_face("r", [i sz(2)+1], -1);
-    wall_p.add_boundary_face("r", [i sz(2)+1], -1);
-    wall_temp.add_boundary_face("r", [i sz(2)+1], -1);
+    % Outer wall
+    outer_wall_vx.add_boundary_face("r", [i sz(2)+1], -1);
+    outer_wall_vr.add_boundary_face("r", [i sz(2)+1], -1);
+    outer_wall_p.add_boundary_face("r", [i sz(2)+1], -1);
+    outer_wall_temp.add_boundary_face("r", [i sz(2)+1], -1);
     domain_boundary.add_boundary_face("r", [i sz(2)+1], -1);
 end
 
@@ -73,23 +99,23 @@ grid.domain_boundary.add_boundary(domain_boundary);
 
 flow.vx_bds.add_boundary(inlet_vx);
 flow.vx_bds.add_boundary(outlet_vx);
-flow.vx_bds.add_boundary(axis_vx);
-flow.vx_bds.add_boundary(wall_vx);
+flow.vx_bds.add_boundary(inner_wall_vx);
+flow.vx_bds.add_boundary(outer_wall_vx);
 
 flow.vr_bds.add_boundary(inlet_vr);
 flow.vr_bds.add_boundary(outlet_vr);
-flow.vr_bds.add_boundary(axis_vr);
-flow.vr_bds.add_boundary(wall_vr);
+flow.vr_bds.add_boundary(inner_wall_vr);
+flow.vr_bds.add_boundary(outer_wall_vr);
 
 flow.p_bds.add_boundary(inlet_p);
 flow.p_bds.add_boundary(outlet_p);
-flow.p_bds.add_boundary(axis_p);
-flow.p_bds.add_boundary(wall_p);
+flow.p_bds.add_boundary(inner_wall_p);
+flow.p_bds.add_boundary(outer_wall_p);
 
 energy.temp_bds.add_boundary(inlet_temp);
 energy.temp_bds.add_boundary(outlet_temp);
-energy.temp_bds.add_boundary(axis_temp);
-energy.temp_bds.add_boundary(wall_temp);
+energy.temp_bds.add_boundary(inner_wall_temp);
+energy.temp_bds.add_boundary(outer_wall_temp);
 
 flow.convert_pressure_bd_conditions();
 
@@ -114,11 +140,12 @@ end
 % Grid
 [X,R]=meshgrid(grid.cent_pos_x, grid.cent_pos_r);
 
-% Values have to be transposed - probably because MATLAB uses column major order
+% Values have to be transposed
 % Temperature graph
 figure(1);
 colormap(jet);
 contourf(X,R,transpose(energy.temp),30);
+pbaspect([L delta_R, 1]);
 
 % Residuals
 figure(2);

@@ -89,12 +89,12 @@ flow.vx_faces = v_inlet*ones(sz + [1 0]);
 flow.vr_faces = zeros(sz + [0 1]);
 energy = EnergyComponent(grid, flow, temp_inlet*ones(sz), @(x) ones(sz), @(x) ones(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-9, 1, 5, 30);
 
-species_manager = SpeciesManagerComponent(grid, flow, energy, @(x) 0, a, b, A_st, E_a, delta_G, catalyst_density, rel_fact_R_st, rel_fact_R_sh, inner_iters);
-h2 = Species("H2", grid, flow, species_manager, zeros(sz), heat_cap_H2, visc_H2, therm_cond_H2, M_H2, diffusion_volume_H2, tol_sp, rel_fact_sp, sp_iters);
-co = Species("CO", grid, flow, species_manager, zeros(sz), heat_cap_CO, visc_CO, therm_cond_CO, M_CO, diffusion_volume_CO, tol_sp, rel_fact_sp, sp_iters);
-co2 = Species("CO2", grid, flow, species_manager, zeros(sz), heat_cap_CO2, visc_CO2, therm_cond_CO2, M_CO2, diffusion_volume_CO2, tol_sp, rel_fact_sp, sp_iters);
-ch4 = Species("CH4", grid, flow, species_manager, M_CH4/(M_CH4+SC*M_H2O) * ones(sz), heat_cap_CH4, visc_CH4, therm_cond_CH4, M_CH4, diffusion_volume_CH4, tol_sp, rel_fact_sp, sp_iters);
-h2o = Species("H2O", grid, flow, species_manager, SC*M_H2O/(M_CH4+SC*M_H2O) * ones(sz), heat_cap_H2O, visc_H2O, therm_cond_H2O, M_H2O, diffusion_volume_H2O, tol_sp, rel_fact_sp, sp_iters);
+species_manager = SpeciesManagerComponent(grid, flow, energy, @(x) 0, a, b, A_st, E_a, catalyst_density, rel_fact_R_st, rel_fact_R_sh, inner_iters);
+h2 = SpeciesComponent("H2", grid, flow, species_manager, zeros(sz), heat_cap_H2, visc_H2, therm_cond_H2, M_H2, diffusion_volume_H2, tol_sp, rel_fact_sp, sp_iters);
+co = SpeciesComponent("CO", grid, flow, species_manager, zeros(sz), heat_cap_CO, visc_CO, therm_cond_CO, M_CO, diffusion_volume_CO, tol_sp, rel_fact_sp, sp_iters);
+co2 = SpeciesComponent("CO2", grid, flow, species_manager, zeros(sz), heat_cap_CO2, visc_CO2, therm_cond_CO2, M_CO2, diffusion_volume_CO2, tol_sp, rel_fact_sp, sp_iters);
+ch4 = SpeciesComponent("CH4", grid, flow, species_manager, M_CH4/(M_CH4+SC*M_H2O) * ones(sz), heat_cap_CH4, visc_CH4, therm_cond_CH4, M_CH4, diffusion_volume_CH4, tol_sp, rel_fact_sp, sp_iters);
+h2o = SpeciesComponent("H2O", grid, flow, species_manager, SC*M_H2O/(M_CH4+SC*M_H2O) * ones(sz), heat_cap_H2O, visc_H2O, therm_cond_H2O, M_H2O, diffusion_volume_H2O, tol_sp, rel_fact_sp, sp_iters);
 
 properties_manager = ThermophysicalProperties(grid, flow, energy, species_manager, 20);
 species_manager.D_f = @properties_manager.D_function;
@@ -166,7 +166,7 @@ num_species = numel(species_list);
 % Grid
 [X,R]=meshgrid(grid.cent_pos_x, grid.cent_pos_r);
 
-% Values have to be transposed - probably because MATLAB uses column major order
+% Values have to be transposed
 % Steam-methane reforming reactor rate
 figure(1);
 colormap(jet);
@@ -193,6 +193,6 @@ figure(4);
 for i = 1:num_species
     name = names(i);
     res = species_manager.residual_history(name);
-    semilogy(res(1:species_manager.noi),'DisplayName',name + " residual");
+    semilogy(res(1:species_manager.noi),'DisplayName', name + " residual");
     hold on;
 end

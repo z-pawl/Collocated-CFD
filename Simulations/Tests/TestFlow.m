@@ -1,18 +1,43 @@
+%% Flow in a pipe
+
 offset_R = 1e-30;
-delta_R = 0.05;
-L = 0.3;
+radius = 0.05;
+length = 0.5;
 
-sz = [60 10];
+sz = [100 10];
 
-dx = L * ones(sz(1),1) / sz(1);
-dr = delta_R * ones(1,sz(2)) / sz(2);
+dx = length * ones(sz(1),1) / sz(1);
+dr = radius * ones(1,sz(2)) / sz(2);
 
 grid = Grid2D(dx, dr, offset_R);
 
-flow = FlowComponent(grid, zeros(sz), zeros(sz), zeros(sz), 1, @(x) 1 * ones(sz), @(x) 1 * ones(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), @(x) zeros(sz), 1e-7, 1e-7, 0.7, 0.3, 1, 1, 70);
+Re = 1000; % Reynolds number
+rho = 1000; % Density kg/m^3
+visc = 1; % Dynamic viscosity Pa*s
+v_inlet = Re * visc / ((2 * radius) * rho);% Inlet velocity is computed from the Reynolds number - density is equal to 1000 kg/m^3 and viscosity is equal to 1 Pa*s
+
+vx_init = zeros(sz);
+vr_init = zeros(sz);
+p_init = zeros(sz);
+porosity = ones(sz);
+rho_function = @(x) rho * ones(sz);
+visc_function = @(x) visc * ones(sz);
+srcx_function = @(x) zeros(sz);
+srcr_function = @(x) zeros(sz);
+src_linx_function = @(x) zeros(sz);
+src_linr_function = @(x) zeros(sz);
+tol_v = 1e-7;
+tol_continuity = 1e-7;
+rel_fact_v = 0.7;
+rel_fact_p = 0.075;
+inner_iters = 1;
+solver_iters_v = 1;
+solver_iters_p = 100;
+
+flow = FlowComponent(grid, vx_init, vr_init, p_init, porosity, rho_function, visc_function, srcx_function, src_linx_function, srcr_function, src_linr_function, tol_v, tol_continuity, rel_fact_v, rel_fact_p, inner_iters, solver_iters_v, solver_iters_p);
 
 % Boundary conditions
-inlet_vx = FixedValueBoundary("Inlet vx", grid, 0.01);
+inlet_vx = FixedValueBoundary("Inlet vx", grid, v_inlet);
 inlet_vr = FixedValueBoundary("Inlet vr", grid, 0);
 inlet_p = FixedNormalDerivativeBoundary("Inlet p", grid, 0);
 % inlet_p = FixedNormalDerivativeBoundary("Inlet p", grid, 0.01*(-1 / 1e-7 - 1 * 0.088 / sqrt(1e-7) .* sqrt(0.01 .^ 2))); % Use with the additional source terms
@@ -80,15 +105,14 @@ flow.p_bds.add_boundary(wall_p);
 
 flow.convert_pressure_bd_conditions();
 
-% Źródła komponentu prędkości
-% Liniowy człon źródłowy dla prędkości w kierunku osiowym
+% Linear source term for momentum in the x direction
 function src_lin_vx = lin_src_vx(flow, permeability, inertia_coefficient)
-    % Człon źródłowy = vx*(-μ/Kp-rho*f/sqrt(Kp)*sqrt(vx^2+vr^2))
+    % Source term = vx*(-μ/Kp-rho*f/sqrt(Kp)*sqrt(vx^2+vr^2))
     src_lin_vx = -flow.visc / permeability - flow.rho * inertia_coefficient / sqrt(permeability) .* sqrt(flow.vx .^ 2 + flow.vr .^ 2);
 end
-% Liniowy człon źródlowy dla prędkości w kierunku promieniowym
+% Linear source term for momentum in the r direction
 function src_lin_vr = lin_src_vr(flow, permeability, inertia_coefficient)
-    % Człon źródłowy = vr*(-μ/Kp-rho*f/sqrt(Kp)*sqrt(vx^2+vr^2))
+    % Source term = vr*(-μ/Kp-rho*f/sqrt(Kp)*sqrt(vx^2+vr^2))
     src_lin_vr = -flow.visc / permeability - flow.rho * inertia_coefficient / sqrt(permeability) .* sqrt(flow.vx .^ 2 + flow.vr .^ 2);
 end
 
@@ -120,25 +144,30 @@ end
 figure(1);
 colormap(jet);
 contourf(X,R,transpose(sqrt(flow.vx .^ 2 + flow.vr .^ 2)),30);
+pbaspect([length radius 1]);
 
 % Velocity in the X direction graph
 figure(2);
 colormap(jet);
 contourf(X,R,transpose(flow.vx),30);
+pbaspect([length radius 1]);
 
 % Velocity in the R direction graph
 figure(3);
 colormap(jet);
 contourf(X,R,transpose(flow.vr),30);
+pbaspect([length radius 1]);
 
 % Pressure graph
 figure(4);
 colormap(jet);
 contourf(X,R,transpose(flow.p),30);
+pbaspect([length radius 1]);
 
 % Streamlines
 figure(5);
 streamslice(X,R,transpose(flow.vx),transpose(flow.vr),2);
+pbaspect([length radius 1]);
 
 % Residuals
 figure(6);

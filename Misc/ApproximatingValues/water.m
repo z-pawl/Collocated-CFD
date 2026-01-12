@@ -44,21 +44,3 @@ for i = 1:size(orthonormal_basis,1)
     c = integral(@(x) polyval(ei, x) .* calculate_G0(x), 0.7, 1.4);
     h2o_G0 = h2o_G0 + c * ei;
 end
-
-
-
-figure(1);
-plot(700:5:1400, arrayfun(@(x) polyval(h2o_H0, x/1000), 700:5:1400));
-hold on;
-plot(700:5:1400, arrayfun(@(x) c_H0(x), 700:5:1400));
-
-figure(2);
-plot(700:1:1400, arrayfun(@(x) polyval(h2o_G0, x/1000), 700:1:1400));
-hold on;
-plot(700:1:1400, arrayfun(@(x) c_G0(x), 700:1:1400));
-
-figure(3);
-plot(700:5:1400, arrayfun(@(x) 100 * (polyval(h2o_H0, x/1000) - c_H0(x)) / c_H0(x), 700:5:1400));
-
-figure(4);
-plot(700:5:1400, arrayfun(@(x) 100 * (polyval(h2o_G0, x/1000) - c_G0(x)) / c_G0(x), 700:5:1400));
