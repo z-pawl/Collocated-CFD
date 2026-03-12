@@ -230,8 +230,6 @@ classdef FlowComponent < IComponent
             % Adding implicit relaxation to ensure the diagonal dominance
             coeff_vx = implicit_relaxation(coeff_vx, obj.vx, obj.implicit_relaxation_factor_v);
             coeff_vr = implicit_relaxation(coeff_vr, obj.vr, obj.implicit_relaxation_factor_v);
-
-            x = any(any(coeff_vx(:,:,1) - sum(coeff_vx(:,:,2:5),3) < 0)) || any(any(coeff_vr(:,:,1) - sum(coeff_vr(:,:,2:5),3) < 0));
         end
 
         function coeff_vx = get_coefficients_vx(obj, Fx, Fr, Dx, Dr)

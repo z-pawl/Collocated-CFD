@@ -8,6 +8,11 @@ E = 0.082139;
 F = -250.8810;
 G = 223.3967;
 
+function C0 = calculate_C0(t)
+    global A B C D E F G;
+    C0 = A + B * t + C * t .^ 2 + D * t .^ 3 + E ./ (t .^ 2);
+end
+
 function H0 = calculate_H0(t)
     global A B C D E F G;
     H0 = A * t + B * t .^ 2 / 2 + C * t .^ 3 / 3 + D * t .^ 4 / 4 - E ./ t + F;
@@ -31,11 +36,25 @@ function g0 = c_G0(T)
 end
 
 % Fitting the polynomials
+h2o_C0 = 0;
+for i = 1:size(orthonormal_basis,1)
+    ei = orthonormal_basis(i,:);
+    c = integral(@(x) polyval(ei, x) .* calculate_C0(x), 0.7, 1.4);
+    h2o_C0 = h2o_C0 + c * ei;
+end
+
 h2o_H0 = 0;
 for i = 1:size(orthonormal_basis,1)
     ei = orthonormal_basis(i,:);
     c = integral(@(x) polyval(ei, x) .* calculate_H0(x), 0.7, 1.4);
     h2o_H0 = h2o_H0 + c * ei;
+end
+
+h2o_S0 = 0;
+for i = 1:size(orthonormal_basis,1)
+    ei = orthonormal_basis(i,:);
+    c = integral(@(x) polyval(ei, x) .* calculate_S0(x), 0.7, 1.4);
+    h2o_S0 = h2o_S0 + c * ei;
 end
 
 h2o_G0 = 0;

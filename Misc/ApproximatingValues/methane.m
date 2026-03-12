@@ -8,6 +8,11 @@ E = [0.678565	-26.42221];
 F = [-76.84376	-153.5327];
 G = [158.7163 224.4143];
 
+function C0 = calculate_C0(t, i)
+    global A B C D E F G;
+    C0 = A(i) + B(i) * t + C(i) * t .^ 2 + D(i) * t .^ 3 + E(i) ./ (t .^ 2);
+end
+
 function H0 = calculate_H0(t, i)
     global A B C D E F G;
     H0 = A(i) * t + B(i) * t .^2 / 2 + C(i) * t .^3 / 3 + D(i) * t .^ 4 / 4 - E(i) ./ t + F(i);
@@ -39,11 +44,25 @@ function g0 = c_G0(T)
 end
 
 % Fitting the polynomials
+ch4_C0 = 0;
+for i = 1:size(orthonormal_basis,1)
+    ei = orthonormal_basis(i,:);
+    c = integral(@(x) polyval(ei, x) .* calculate_C0(x, 1), 0.7, 1.3) + integral(@(x) polyval(ei, x) .* calculate_C0(x, 2), 1.3, 1.4);
+    ch4_C0 = ch4_C0 + c * ei;
+end
+
 ch4_H0 = 0;
 for i = 1:size(orthonormal_basis,1)
     ei = orthonormal_basis(i,:);
     c = integral(@(x) polyval(ei, x) .* calculate_H0(x, 1), 0.7, 1.3) + integral(@(x) polyval(ei, x) .* calculate_H0(x, 2), 1.3, 1.4);
     ch4_H0 = ch4_H0 + c * ei;
+end
+
+ch4_S0 = 0;
+for i = 1:size(orthonormal_basis,1)
+    ei = orthonormal_basis(i,:);
+    c = integral(@(x) polyval(ei, x) .* calculate_S0(x, 1), 0.7, 1.3) + integral(@(x) polyval(ei, x) .* calculate_S0(x, 2), 1.3, 1.4);
+    ch4_S0 = ch4_S0 + c * ei;
 end
 
 ch4_G0 = 0;
