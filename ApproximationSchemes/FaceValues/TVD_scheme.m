@@ -12,35 +12,33 @@ function [coeffs_x, coeffs_r] = TVD_scheme(grid, vel_x_faces, vel_r_faces, flux_
     coeffs_x = zeros([(sz + [1 0]) 3]);
     coeffs_r = zeros([(sz + [0 1]) 3]);
 
-    for i = 2:sz(1)
-        for j = 1:sz(2)
-            if vel_x_faces(i,j) >= 0
-                limiter = flux_limiter(field_face_derivatives_x(i,j), field_face_derivatives_x(i-1,j));
-                coeffs_x(i,j,1) = 1 - 0.5 * limiter;
-                coeffs_x(i,j,2) = 0.5 * limiter;
-                % coeffs_x(i,j,3) = 0;
-            else
-                limiter = flux_limiter(field_face_derivatives_x(i,j), field_face_derivatives_x(i+1,j));
-                coeffs_x(i,j,1) = 0.5 * limiter;
-                coeffs_x(i,j,2) = 1 - 0.5 * limiter;
-                % coeffs_x(i,j,3) = 0;
-            end
-        end
-    end
+    %% Coefficients in the x direction
+    mask_pos_vel_x = vel_x_faces(2:sz(1),:) >= 0;
+    upwind_face_derivatives_x = field_face_derivatives_x(3:sz(1)+1,:);
+    temp_field_x = field_face_derivatives_x(1:sz(1)-1,:);
+    upwind_face_derivatives_x(mask_pos_vel_x) = temp_field_x(mask_pos_vel_x);
 
-    for i = 1:sz(1)
-        for j = 2:sz(2)
-            if vel_r_faces(i,j) >= 0
-                limiter = flux_limiter(field_face_derivatives_r(i,j), field_face_derivatives_r(i,j-1));
-                coeffs_r(i,j,1) = 1 - 0.5 * limiter;
-                coeffs_r(i,j,2) = 0.5 * limiter;
-                % coeffs_x(i,j,3) = 0;
-            else
-                limiter = flux_limiter(field_face_derivatives_r(i,j), field_face_derivatives_r(i,j+1));
-                coeffs_r(i,j,1) = 0.5 * limiter;
-                coeffs_r(i,j,2) = 1 - 0.5 * limiter;
-                % coeffs_x(i,j,3) = 0;
-            end
-        end
-    end
+    % Limiter
+    temp_field_x = flux_limiter(field_face_derivatives_x(2:sz(1),:), upwind_face_derivatives_x);
+
+    % Coefficient computations
+    temp_field_x(mask_pos_vel_x) = 1 - temp_field_x(mask_pos_vel_x) / 2;
+    temp_field_x(~mask_pos_vel_x) = temp_field_x(~mask_pos_vel_x) / 2;
+    coeffs_x(2:sz(1),:,1) = temp_field_x;
+    coeffs_x(2:sz(1),:,2) = 1 - temp_field_x;
+
+    %% Coefficients in the r direction
+    mask_pos_vel_r = vel_r_faces(:,2:sz(2)) >= 0;
+    upwind_face_derivatives_r = field_face_derivatives_r(:,3:sz(2)+1);
+    temp_field_r = field_face_derivatives_r(:,1:sz(2)-1);
+    upwind_face_derivatives_r(mask_pos_vel_r) = temp_field_r(mask_pos_vel_r);
+
+    % Limiter
+    temp_field_r = flux_limiter(field_face_derivatives_r(:,2:sz(2)), upwind_face_derivatives_r);
+
+    % Coefficient computations
+    temp_field_r(mask_pos_vel_r) = 1 - temp_field_r(mask_pos_vel_r) / 2;
+    temp_field_r(~mask_pos_vel_r) = temp_field_r(~mask_pos_vel_r) / 2;
+    coeffs_r(:,2:sz(2),1) = temp_field_r;
+    coeffs_r(:,2:sz(2),2) = 1 - temp_field_r;
 end

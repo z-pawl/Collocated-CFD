@@ -101,8 +101,6 @@ classdef SpeciesComponent < handle
             % Diffusivity [m^2/s]
             [diff_x, diff_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.D);
 
-            clear lin_int_coeffs_x lin_int_coeffs_r;
-
             % Values and normal derivatives of temperature at faces
             % Coefficients for normal derivatives
             [coeffs_x_n_der, coeffs_r_n_der] = central_differencing_scheme(obj.grid);
@@ -121,8 +119,6 @@ classdef SpeciesComponent < handle
             [coeffs_x_deferred, coeffs_r_deferred] = deferred_correction_face(coeffs_x_upwind, coeffs_r_upwind, coeffs_x_TVD, coeffs_r_TVD, obj.Y);
             [coeffs_x_deferred, coeffs_r_deferred] = obj.species_bds.apply_boundary_condition_value(coeffs_x_deferred, coeffs_r_deferred);
 
-            clear coeffs_x_upwind coeffs_r_upwind coeffs_x_TVD coeffs_r_TVD;
-
             % F = rho * v * A [kg/s]
             Fx = rho_x .* obj.flow.vx_faces .* obj.grid.face_area_x;
             Fr = rho_r .* obj.flow.vr_faces .* obj.grid.face_area_r;
@@ -130,8 +126,6 @@ classdef SpeciesComponent < handle
             % D = rho * diff * A [kg*m/s]
             Dx = rho_x .* diff_x .* obj.grid.face_area_x;
             Dr = rho_r .* diff_r .* obj.grid.face_area_r;
-
-            clear rho_x rho_r diff_x diff_r;
 
             % The sum of diffusive fluxes for all species is subtracted
             % from the mass flux in order to apply mass correction
@@ -147,7 +141,7 @@ classdef SpeciesComponent < handle
             coeff = obj.get_coefficients();
 
             % Solving the system of equations and updating the field using the relaxation factor
-            obj.Y = obj.Y + obj.relaxation_factor * (solve(coeff, obj.Y, obj.solver_iters, [1; 3; 2; 4], 1) - obj.Y);
+            obj.Y = obj.Y + obj.relaxation_factor * (solve_mex(coeff, obj.Y, obj.solver_iters, [1; 3; 2; 4], 1) - obj.Y);
             
 
             % Updating the aP, Jx and Jr values used by the species manager
@@ -163,8 +157,6 @@ classdef SpeciesComponent < handle
             [rho_x, rho_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.flow.rho);
             % Diffusivity [m^2/s]
             [diff_x, diff_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.D);
-
-            clear lin_int_coeffs_x lin_int_coeffs_r;
 
             % Values and normal derivatives of temperature at faces
             % Coefficients for normal derivatives

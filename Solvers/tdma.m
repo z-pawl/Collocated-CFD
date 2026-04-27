@@ -7,13 +7,13 @@
 % b,d - nx1 vectors
 % a,c - nx1 vectors - script will ignore the first and the last element of the vector respectively
 function d = tdma(a,b,c,d)
-
+    %#codegen
     % Dimension of the matrix A
     n = length(b);
 
     % Forward sweep
     for i = 2:n
-        w = a(i)/b(i-1);
+        w = a(i) / b(i-1);
         b(i) = b(i) - w*c(i-1);
         d(i) = d(i) - w*d(i-1);
     end
@@ -25,4 +25,3 @@ function d = tdma(a,b,c,d)
         d(i) = (d(i)-c(i)*d(i+1))/b(i);
     end
 end
-

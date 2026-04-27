@@ -72,17 +72,18 @@ outlet_n_flux = outlet_rho .* flow.vx_faces(end, :) ./ (species_manager.M_mix(en
 
 % Inlet and outlet specific molar entropy of species [J/(mol*K)]
 % s_i = s^0_i - R ln(p / p_0) - R ln(x_i)
-inlet_s_ch4 = polyval(ch4_S0, inlet_T) - R * log(inlet_p / p_ref) - R * log(inlet_x_ch4);
-inlet_s_h2o = polyval(h2o_S0, inlet_T) - R * log(inlet_p / p_ref) - R * log(inlet_x_h2o);
-inlet_s_h2 = polyval(h2_S0, inlet_T) - R * log(inlet_p / p_ref) - R * log(inlet_x_h2);
-inlet_s_co = polyval(co_S0, inlet_T) - R * log(inlet_p / p_ref) - R * log(inlet_x_co);
-inlet_s_co2 = polyval(co2_S0, inlet_T) - R * log(inlet_p / p_ref) - R * log(inlet_x_co2);
+EPS = 1e-12;
+inlet_s_ch4 = polyval(ch4_S0, inlet_T) - R * log(inlet_p / p_ref) - R * log(inlet_x_ch4+EPS);
+inlet_s_h2o = polyval(h2o_S0, inlet_T) - R * log(inlet_p / p_ref) - R * log(inlet_x_h2o+EPS);
+inlet_s_h2 = polyval(h2_S0, inlet_T) - R * log(inlet_p / p_ref) - R * log(inlet_x_h2+EPS);
+inlet_s_co = polyval(co_S0, inlet_T) - R * log(inlet_p / p_ref) - R * log(inlet_x_co+EPS);
+inlet_s_co2 = polyval(co2_S0, inlet_T) - R * log(inlet_p / p_ref) - R * log(inlet_x_co2+EPS);
 
-outlet_s_ch4 = polyval(ch4_S0, outlet_T) - R * log(outlet_p / p_ref) - R * log(outlet_x_ch4);
-outlet_s_h2o = polyval(h2o_S0, outlet_T) - R * log(outlet_p / p_ref) - R * log(outlet_x_h2o);
-outlet_s_h2 = polyval(h2_S0, outlet_T) - R * log(outlet_p / p_ref) - R * log(outlet_x_h2);
-outlet_s_co = polyval(co_S0, outlet_T) - R * log(outlet_p / p_ref) - R * log(outlet_x_co);
-outlet_s_co2 = polyval(co2_S0, outlet_T) - R * log(outlet_p / p_ref) - R * log(outlet_x_co2);
+outlet_s_ch4 = polyval(ch4_S0, outlet_T) - R * log(outlet_p / p_ref) - R * log(outlet_x_ch4+EPS);
+outlet_s_h2o = polyval(h2o_S0, outlet_T) - R * log(outlet_p / p_ref) - R * log(outlet_x_h2o+EPS);
+outlet_s_h2 = polyval(h2_S0, outlet_T) - R * log(outlet_p / p_ref) - R * log(outlet_x_h2+EPS);
+outlet_s_co = polyval(co_S0, outlet_T) - R * log(outlet_p / p_ref) - R * log(outlet_x_co+EPS);
+outlet_s_co2 = polyval(co2_S0, outlet_T) - R * log(outlet_p / p_ref) - R * log(outlet_x_co2+EPS);
 
 % Inlet and outlet specific molar entropy [J/(mol*K)]
 % s = x_i * s_i

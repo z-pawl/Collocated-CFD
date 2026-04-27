@@ -3,9 +3,33 @@ classdef FixedValueBoundary < IBoundaryType
         grid Grid2D {mustBeScalarOrEmpty}
         value (1,1) double
 
-        % Each row consists of: x-index, r-index, orientation
-        boundary_faces_x (:,3) double
-        boundary_faces_r (:,3) double
+        % Linearized indices
+        lin_ind_x_p1 (:,1) double % x face, page 1 (i,j,1)
+        lin_ind_x_p2 (:,1) double % x face, page 2 (i,j,2)
+        lin_ind_x_p3 (:,1) double % x face, page 3 (i,j,3)
+
+        lin_ind_r_p1 (:,1) double % r face, page 1 (i,j,1)
+        lin_ind_r_p2 (:,1) double % r face, page 2 (i,j,2)
+        lin_ind_r_p3 (:,1) double % r face, page 3 (i,j,3)
+
+        % Coefficient values
+        % Boundary value
+        bd_val_x_p1 (:,1) double % x face, page 1 (i,j,1)
+        bd_val_x_p2 (:,1) double % x face, page 2 (i,j,2)
+        bd_val_x_p3 (:,1) double % x face, page 3 (i,j,3)
+
+        bd_val_r_p1 (:,1) double % r face, page 1 (i,j,1)
+        bd_val_r_p2 (:,1) double % r face, page 2 (i,j,2)
+        bd_val_r_p3 (:,1) double % r face, page 3 (i,j,3)
+
+        % Boundary normal derivative
+        bd_der_x_p1 (:,1) double % x face, page 1 (i,j,1)
+        bd_der_x_p2 (:,1) double % x face, page 2 (i,j,2)
+        bd_der_x_p3 (:,1) double % x face, page 3 (i,j,3)
+
+        bd_der_r_p1 (:,1) double % r face, page 1 (i,j,1)
+        bd_der_r_p2 (:,1) double % r face, page 2 (i,j,2)
+        bd_der_r_p3 (:,1) double % r face, page 3 (i,j,3)
     end
     methods
         function obj = FixedValueBoundary(name, grid, value)
@@ -36,12 +60,66 @@ classdef FixedValueBoundary < IBoundaryType
                     if (1 > face_index(1) || face_index(1) > obj.grid.sz(1)+1) || (1 > face_index(2) || face_index(2) > obj.grid.sz(2))
                         error("Provided face index is out of bounds");
                     end
-                    obj.boundary_faces_x(size(obj.boundary_faces_x,1)+1,:) = [face_index orientation];
+
+                    % Linearizing the index
+                    new_ind = numel(obj.lin_ind_x_p1) + 1;
+                    sz = obj.grid.sz + [1 0];
+                    lin_ind = sub2ind(sz, face_index(1), face_index(2));
+                    obj.lin_ind_x_p1(new_ind) = lin_ind;
+                    obj.lin_ind_x_p2(new_ind) = lin_ind + prod(sz);
+                    obj.lin_ind_x_p3(new_ind) = lin_ind + 2 * prod(sz);
+
+                    % Boundary value coefficients
+                    obj.bd_val_x_p1(new_ind) = 0;
+                    obj.bd_val_x_p2(new_ind) = 0;
+                    obj.bd_val_x_p3(new_ind) = obj.value;
+
+                    % Boundary normal derivative coefficients
+                    dx = obj.grid.dx(:,1);
+                    i = face_index(1);
+                    if orientation == 1
+                        dx_inv = 2 / dx(i);
+                        obj.bd_der_x_p1(new_ind) = 0;
+                        obj.bd_der_x_p2(new_ind) = dx_inv;
+                        obj.bd_der_x_p3(new_ind) = -dx_inv * obj.value;
+                    else
+                        dx_inv = -2 / dx(i-1);
+                        obj.bd_der_x_p1(new_ind) = dx_inv;
+                        obj.bd_der_x_p2(new_ind) = 0;
+                        obj.bd_der_x_p3(new_ind) = -dx_inv * obj.value;
+                    end
                 case "r"
                     if (1 > face_index(1) || face_index(1) > obj.grid.sz(1)) || (1 > face_index(2) || face_index(2) > obj.grid.sz(2)+1)
                         error("Provided face index is out of bounds");
                     end
-                    obj.boundary_faces_r(size(obj.boundary_faces_r,1)+1,:) = [face_index orientation];
+                    
+                    % Linearizing the index
+                    new_ind = numel(obj.lin_ind_r_p1) + 1;
+                    sz = obj.grid.sz + [0 1];
+                    lin_ind = sub2ind(sz, face_index(1), face_index(2));
+                    obj.lin_ind_r_p1(new_ind) = lin_ind;
+                    obj.lin_ind_r_p2(new_ind) = lin_ind + prod(sz);
+                    obj.lin_ind_r_p3(new_ind) = lin_ind + 2 * prod(sz);
+
+                    % Boundary value coefficients
+                    obj.bd_val_r_p1(new_ind) = 0;
+                    obj.bd_val_r_p2(new_ind) = 0;
+                    obj.bd_val_r_p3(new_ind) = obj.value;
+
+                    % Boundary normal derivative coefficients
+                    dr = obj.grid.dr(1,:);
+                    j = face_index(2);
+                    if orientation == 1
+                        dr_inv = 2 / dr(j);
+                        obj.bd_der_r_p1(new_ind) = 0;
+                        obj.bd_der_r_p2(new_ind) = dr_inv;
+                        obj.bd_der_r_p3(new_ind) = -dr_inv * obj.value;
+                    else
+                        dr_inv = -2 / dr(j-1);
+                        obj.bd_der_r_p1(new_ind) = dr_inv;
+                        obj.bd_der_r_p2(new_ind) = 0;
+                        obj.bd_der_r_p3(new_ind) = -dr_inv * obj.value;
+                    end
                 otherwise
                     error("Provided direction has to be a name of one of the directions, either 'x' or 'r'");
             end
@@ -49,59 +127,35 @@ classdef FixedValueBoundary < IBoundaryType
         
         function [coeffs_x, coeffs_r] = apply_boundary_condition_value(obj, coeffs_x, coeffs_r)
             % X faces
-            faces_x = obj.boundary_faces_x;
-            for k = 1:size(faces_x,1)
-                coeffs_x(faces_x(k,1),faces_x(k,2),:) = [0 0 obj.value];
-            end
+            coeffs_x(obj.lin_ind_x_p1) = obj.bd_val_x_p1;
+            coeffs_x(obj.lin_ind_x_p2) = obj.bd_val_x_p2;
+            coeffs_x(obj.lin_ind_x_p3) = obj.bd_val_x_p3;
 
             % R faces
-            faces_r = obj.boundary_faces_r;
-            for k = 1:size(faces_r,1)
-                coeffs_r(faces_r(k,1),faces_r(k,2),:) = [0 0 obj.value];
-            end
+            coeffs_r(obj.lin_ind_r_p1) = obj.bd_val_r_p1;
+            coeffs_r(obj.lin_ind_r_p2) = obj.bd_val_r_p2;
+            coeffs_r(obj.lin_ind_r_p3) = obj.bd_val_r_p3;
         end
 
         function [coeffs_x, coeffs_r] = apply_boundary_condition_normal_derivative(obj, coeffs_x, coeffs_r)
             % X faces
-            faces_x = obj.boundary_faces_x;
-            dx = obj.grid.dx(:,1);
-
-            for k = 1:size(faces_x,1)
-                i = faces_x(k,1);
-                j = faces_x(k,2);
-                orientation = faces_x(k,3);
-
-                if orientation == 1
-                    dx_inv = 2 / dx(i);
-                    coeffs_x(i,j,:) = [0, dx_inv, -obj.value * dx_inv];
-                else
-                    dx_inv = -2 / dx(i-1);
-                    coeffs_x(i,j,:) = [dx_inv, 0, -obj.value * dx_inv];
-                end
-            end
+            coeffs_x(obj.lin_ind_x_p1) = obj.bd_der_x_p1;
+            coeffs_x(obj.lin_ind_x_p2) = obj.bd_der_x_p2;
+            coeffs_x(obj.lin_ind_x_p3) = obj.bd_der_x_p3;
 
             % R faces
-            faces_r = obj.boundary_faces_r;
-            dr = obj.grid.dr(1,:);
-
-            for k = 1:size(faces_r,1)
-                i = faces_r(k,1);
-                j = faces_r(k,2);
-                orientation = faces_r(k,3);
-
-                if orientation == 1
-                    dr_inv = 2 / dr(j);
-                    coeffs_r(i,j,:) = [0, dr_inv, -obj.value * dr_inv];
-                else
-                    dr_inv = -2 / dr(j-1);
-                    coeffs_r(i,j,:) = [dr_inv, 0, -obj.value * dr_inv];
-                end
-            end
+            coeffs_r(obj.lin_ind_r_p1) = obj.bd_der_r_p1;
+            coeffs_r(obj.lin_ind_r_p2) = obj.bd_der_r_p2;
+            coeffs_r(obj.lin_ind_r_p3) = obj.bd_der_r_p3;
         end
     
         function converted_bd = convert_into_correction_boundary(obj)
             converted_bd = obj.copy();
             converted_bd.value = 0;
+            converted_bd.bd_val_x_p3(:) = 0;
+            converted_bd.bd_val_r_p3(:) = 0;
+            converted_bd.bd_der_x_p3(:) = 0;
+            converted_bd.bd_der_r_p3(:) = 0;
         end
     end
 end

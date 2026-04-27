@@ -64,7 +64,7 @@ classdef FlowComponent < IComponent
         residual_history_vx (:,1) double                % X component of velocity residual history
         residual_history_vr (:,1) double                % R component of velocity residual history
         residual_history_continuity (:,1) double        % Continuity residual history
-        m (1,1) double = 3                              % Number of initial iterations to monitor continuity residual
+        m (1,1) double = 10                             % Number of initial iterations to monitor continuity residual
         max_continuity_residual (1,1) double            % Maximum unscaled continuity residual during first m iterations
     end
     methods
@@ -195,8 +195,6 @@ classdef FlowComponent < IComponent
             % Porosity [-]
             [porosity_x, porosity_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.porosity);
 
-            clear lin_int_coeffs_x lin_int_coeffs_r
-
             % F = rho * v * A / porosity ^ 2 [kg/s]
             Fx = rho_x .* obj.vx_faces .* obj.grid.face_area_x ./ porosity_x .^ 2;
             Fr = rho_r .* obj.vr_faces .* obj.grid.face_area_r ./ porosity_r .^ 2;
@@ -205,13 +203,10 @@ classdef FlowComponent < IComponent
             Dx = visc_x .* obj.grid.face_area_x ./ porosity_x;
             Dr = visc_r .* obj.grid.face_area_r ./ porosity_r;
 
-            clear rho_x rho_r visc_x visc_r;
-
 
             % Calculating velocities coefficients
             coeff_vx = obj.get_coefficients_vx(Fx, Fr, Dx, Dr);
             coeff_vr = obj.get_coefficients_vr(Fx, Fr, Dx, Dr);
-            clear Fx Fr Dx Dr;
 
 
             % Calculating the volume integral of pressure gradient [N]=[kg*m/s^2]
@@ -252,8 +247,6 @@ classdef FlowComponent < IComponent
             [coeffs_x_vx_deferred, coeffs_r_vx_deferred] = deferred_correction_face(coeffs_x_upwind, coeffs_r_upwind, coeffs_x_TVD, coeffs_r_TVD, obj.vx);
             [coeffs_x_vx_deferred, coeffs_r_vx_deferred] = obj.vx_bds.apply_boundary_condition_value(coeffs_x_vx_deferred, coeffs_r_vx_deferred);
 
-            clear n_der_vx_x n_der_vx_r coeffs_x_upwind coeffs_r_upwind coeffs_x_TVD coeffs_r_TVD;
-
             coeff_vx = assemble_coeff_array(Fx, Fr, Dx, Dr, coeffs_x_vx_deferred, coeffs_r_vx_deferred, coeffs_x_n_der_vx, coeffs_r_n_der_vx, obj.srcx, obj.src_linx, obj.grid.volume);
         end
 
@@ -276,8 +269,6 @@ classdef FlowComponent < IComponent
             % Coefficients for the deferred scheme
             [coeffs_x_vr_deferred, coeffs_r_vr_deferred] = deferred_correction_face(coeffs_x_upwind, coeffs_r_upwind, coeffs_x_TVD, coeffs_r_TVD, obj.vr);
             [coeffs_x_vr_deferred, coeffs_r_vr_deferred] = obj.vr_bds.apply_boundary_condition_value(coeffs_x_vr_deferred, coeffs_r_vr_deferred);
-
-            clear n_der_vr_x n_der_vr_r coeffs_x_upwind coeffs_r_upwind coeffs_x_TVD coeffs_r_TVD;
 
         
             coeff_vr = assemble_coeff_array(Fx, Fr, Dx, Dr, coeffs_x_vr_deferred, coeffs_r_vr_deferred, coeffs_x_n_der_vr, coeffs_r_n_der_vr, obj.srcr, obj.src_linr, obj.grid.volume);
@@ -304,14 +295,11 @@ classdef FlowComponent < IComponent
             [Df_x, ~] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.grid.volume ./ coeff_vx_aP);
             [~, Df_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.grid.volume ./ coeff_vr_aP);
 
-            clear lin_int_coeffs_x lin_int_coeffs_x coeff_vx_aP coeff_vr_aP
-
             % Calculating the coefficients used in the discretized equations
             c_x = rho_x .* obj.grid.face_area_x .* Df_x; % [m^2*s]
             c_r = rho_r .* obj.grid.face_area_r .* Df_r; % [m^2*s]
             Fx = rho_x .* obj.vx_faces .* obj.grid.face_area_x; % [kg/s]
             Fr = rho_r .* obj.vr_faces .* obj.grid.face_area_r; % [kg/s]
-            clear rho_x rho_r coeff_vx_aP_f coeff_vr_aP_f Df_x Df_r
 
             % Calculating coefficients for normal derivatives at faces for pressure
             [coeff_der_p_x, coeff_der_p_r] = central_differencing_scheme(obj.grid);
@@ -348,8 +336,8 @@ classdef FlowComponent < IComponent
                 [coeff_vx, coeff_vr] = obj.get_coefficients_v();
 
                 % Calculating the intermediate velocities [m/s]
-                vx_star=solve(coeff_vx, obj.vx, obj.solver_iters_v, randi([1 4], [4 1]), obj.relaxation_factor_v);
-                vr_star=solve(coeff_vr, obj.vr, obj.solver_iters_v, randi([1 4], [4 1]), obj.relaxation_factor_v);
+                vx_star=solve_mex(coeff_vx, obj.vx, obj.solver_iters_v, randi([1 4], [4 1]), obj.relaxation_factor_v);
+                vr_star=solve_mex(coeff_vr, obj.vr, obj.solver_iters_v, randi([1 4], [4 1]), obj.relaxation_factor_v);
 
                 % Calculating the unrelaxed central coefficients used to
                 % calculate rhie chow correction and the pressure correction [kg/s]
@@ -362,7 +350,7 @@ classdef FlowComponent < IComponent
                 % Calculating the coefficients of the pressure correction equation and solving it
                 coeff_p_corr = obj.get_coefficients_p_corr(coeff_vx_unrelaxed, coeff_vr_unrelaxed);
 
-                p_corr = solve(coeff_p_corr, zeros(obj.grid.sz), obj.solver_iters_p, [1;3;2;4], 1); % [Pa]
+                p_corr = solve_mex(coeff_p_corr, zeros(obj.grid.sz), obj.solver_iters_p, [1;3;2;4], 1); % [Pa]
 
                 % Calculating the pressure force from the pressure correction and using it to correct the velocities
                 % Coefficients for pressure interpolation

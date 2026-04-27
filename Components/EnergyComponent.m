@@ -99,8 +99,6 @@ classdef EnergyComponent < IComponent
             % Heat capacity [J/(kg*K)]
             [cp_x, cp_r] = evaluate_faces(lin_int_coeffs_x, lin_int_coeffs_r, obj.cp);
 
-            clear lin_int_coeffs_x lin_int_coeffs_r;
-
             % Values and normal derivatives of temperature at faces
             % Coefficients for normal derivatives
             [coeffs_x_n_der_temp, coeffs_r_n_der_temp] = central_differencing_scheme(obj.grid);
@@ -119,8 +117,6 @@ classdef EnergyComponent < IComponent
             [coeffs_x_temp_deferred, coeffs_r_temp_deferred] = deferred_correction_face(coeffs_x_upwind, coeffs_r_upwind, coeffs_x_TVD, coeffs_r_TVD, obj.temp);
             [coeffs_x_temp_deferred, coeffs_r_temp_deferred] = obj.temp_bds.apply_boundary_condition_value(coeffs_x_temp_deferred, coeffs_r_temp_deferred);
 
-            clear n_der_temp_x n_der_temp_r coeffs_x_upwind coeffs_r_upwind coeffs_x_TVD coeffs_r_TVD;
-
 
             % F = rho * cp * v * A [W/K]
             Fx = rho_x .* cp_x .* obj.flow.vx_faces .* obj.grid.face_area_x;
@@ -129,9 +125,6 @@ classdef EnergyComponent < IComponent
             % D = k * A [W*m/K]
             Dx = k_x .* obj.grid.face_area_x;
             Dr = k_r .* obj.grid.face_area_r;
-
-
-            clear rho_x rho_r k_x k_r cp_x cp_r;
 
 
             coeff = assemble_coeff_array(Fx, Fr, Dx, Dr, coeffs_x_temp_deferred, coeffs_r_temp_deferred, coeffs_x_n_der_temp, coeffs_r_n_der_temp, obj.q, obj.qt, obj.grid.volume);
@@ -147,7 +140,7 @@ classdef EnergyComponent < IComponent
                 coeff = obj.get_coefficients();
     
                 % Solving the system of equations and updating the field using the relaxation factor
-                obj.temp = obj.temp + obj.relaxation_factor * (solve(coeff, obj.temp, obj.solver_iters, [1; 3; 2; 4], 1) - obj.temp);
+                obj.temp = obj.temp + obj.relaxation_factor * (solve_mex(coeff, obj.temp, obj.solver_iters, [1; 3; 2; 4], 1) - obj.temp);
             end
 
             % Updating properties

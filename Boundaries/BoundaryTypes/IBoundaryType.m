@@ -3,7 +3,6 @@ classdef (Abstract) IBoundaryType < handle & matlab.mixin.Heterogeneous & matlab
         name (1,1) string
     end
     methods (Abstract)
-        add_boundary_face(obj, direction, face_index, orientation)
         [coeffs_x, coeffs_r] = apply_boundary_condition_value(obj, coeffs_x, coeffs_r)
         [coeffs_x, coeffs_r] = apply_boundary_condition_normal_derivative(obj, coeffs_x, coeffs_r)
         
