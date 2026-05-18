@@ -179,7 +179,7 @@ classdef ThermophysicalProperties < handle
             % Convert from molar to specific heat capacity
             % Unit of molar mass is g/mol, thus it has to be changed
             g_TO_kg = 1 / 1000;
-            cp = cp .* (M_mix * g_TO_kg);
+            cp = cp ./ (M_mix * g_TO_kg);
         end
     
         % Function used to calculate the thermal conductivity [W/(m*K)]

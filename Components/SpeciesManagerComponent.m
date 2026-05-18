@@ -221,20 +221,37 @@ classdef SpeciesManagerComponent < IComponent
             % masses of species taking part in the reaction (units don't
             % have to be changed as they cancel one another)
             K_sh = exp(-obj.delta_G ./ (obj.R * obj.energy.temp)); 
-            K_sh = K_sh * ((co2_component.M * h2_component.M) / (co_component.M * h2o_component.M)); % [-]
+            K_sh_m = K_sh * ((co2_component.M * h2_component.M) / (co_component.M * h2o_component.M)); % [-]
 
             % The coefficients of the quadratic equation
-            A = K_sh .* b_co .* b_h2o - b_co2 .* b_h2; % [m^6*s^2/mol^2]
-            B = -K_sh .* (b_co .* h2o_component.Y + b_h2o .* co_component.Y) - (b_co2 .* h2_component.Y + b_h2 .* co2_component.Y); % [m^3*s/mol]
-            C = K_sh .* co_component.Y .*  h2o_component.Y - co2_component.Y .* h2_component.Y; % [-]
+            A = K_sh_m .* b_co .* b_h2o - b_co2 .* b_h2; % [m^6*s^2/mol^2]
+            B = -K_sh_m .* (b_co .* h2o_component.Y + b_h2o .* co_component.Y) - (b_co2 .* h2_component.Y + b_h2 .* co2_component.Y); % [m^3*s/mol]
+            C = K_sh_m .* co_component.Y .*  h2o_component.Y - co2_component.Y .* h2_component.Y; % [-]
 
             B_2A = -B ./ (2 * A); % [mol/(m^3*s)]
             delta_2A = B .* B - 4 * A .* C;
             pos_delta = delta_2A >= 0; % Logical mask whether delta is positive
             delta_2A = sqrt(delta_2A .* pos_delta) ./ (2 * A); % [mol/(m^3*s)]
 
+            % Determining the root - taking the smaller (in terms of
+            % absolute value) with the same sign as C
+            R_sh_corr_1 = (B_2A - delta_2A) .* pos_delta; % [mol/(m^3*s)]
+            R_sh_corr_2 = (B_2A + delta_2A) .* pos_delta; % [mol/(m^3*s)]
+            same_sign_1 = sign(R_sh_corr_1) == sign(C);
+            same_sign_2 = sign(R_sh_corr_2) == sign(C);
+            abs_1 = abs(R_sh_corr_1);
+            abs_2 = abs(R_sh_corr_2);
+            temp_mask = same_sign_1 & same_sign_2;
+            R_sh_corr = zeros(size(R_sh_corr_1));
+            R_sh_corr(temp_mask) = R_sh_corr_1(temp_mask);
+            temp_mask = temp_mask & (abs_2 < abs_1);
+            R_sh_corr(temp_mask) = R_sh_corr_2(temp_mask);
+            temp_mask = same_sign_1 & ~same_sign_2;
+            R_sh_corr(temp_mask) = R_sh_corr_1(temp_mask);
+            temp_mask = ~same_sign_1 & same_sign_2;
+            R_sh_corr(temp_mask) = R_sh_corr_2(temp_mask);
+
             % Updating the reaction rate using the relaxation factor
-            R_sh_corr = (B_2A - delta_2A) .* pos_delta; % [mol/(m^3*s)]
             obj.R_sh = obj.R_sh + obj.relaxation_factor_R_sh * R_sh_corr;
             % At least one species from each side of the reaction is
             % missing - the reaction rate is zero

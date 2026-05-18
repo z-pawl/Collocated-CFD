@@ -1,6 +1,7 @@
 classdef NonUniformConvectiveBoundary < IBoundaryType
     properties
         grid Grid2D {mustBeScalarOrEmpty}
+        energy_component EnergyComponent {mustBeScalarOrEmpty}
 
         % Linearized indices
         lin_ind_x_p1 (:,1) double % x face, page 1 (i,j,1)
@@ -12,32 +13,30 @@ classdef NonUniformConvectiveBoundary < IBoundaryType
         lin_ind_r_p3 (:,1) double % r face, page 3 (i,j,3)
 
         % Coefficient values
-        % Boundary value
-        bd_val_x_p1 (:,1) double % x face, page 1 (i,j,1)
-        bd_val_x_p2 (:,1) double % x face, page 2 (i,j,2)
-        bd_val_x_p3 (:,1) double % x face, page 3 (i,j,3)
+        % X faces
+        heat_trans_coeff_x (:,1) double % Heat transfer coefficient [W/(m^2*K)]
+        environment_temp_x (:,1) double % Environment temperature [K]
+        dx_inv_times_2 (:,1) double % Inverse of the distance to the boundary [1/m]
+        orientation_x (:,1) double % Orientation - points inwards [-]
+        cell_ind_x (:,1) double % Linearized index of the boundary cell
 
-        bd_val_r_p1 (:,1) double % r face, page 1 (i,j,1)
-        bd_val_r_p2 (:,1) double % r face, page 2 (i,j,2)
-        bd_val_r_p3 (:,1) double % r face, page 3 (i,j,3)
-
-        % Boundary normal derivative
-        bd_der_x_p1 (:,1) double % x face, page 1 (i,j,1)
-        bd_der_x_p2 (:,1) double % x face, page 2 (i,j,2)
-        bd_der_x_p3 (:,1) double % x face, page 3 (i,j,3)
-
-        bd_der_r_p1 (:,1) double % r face, page 1 (i,j,1)
-        bd_der_r_p2 (:,1) double % r face, page 2 (i,j,2)
-        bd_der_r_p3 (:,1) double % r face, page 3 (i,j,3)
+        % R faces
+        heat_trans_coeff_r (:,1) double % Heat transfer coefficient [W/(m^2*K)]
+        environment_temp_r (:,1) double % Environment temperature [K]
+        dr_inv_times_2 (:,1) double % Inverse of the distance to the boundary [1/m]
+        orientation_r (:,1) double % Orientation - points inwards [-]
+        cell_ind_r (:,1) double % Linearized index of the boundary cell
     end
     methods
-        function obj = NonUniformFixedValueBoundary(name, grid)
+        function obj = NonUniformConvectiveBoundary(name, grid, energy_component)
             arguments
                 name (1,1) string
                 grid (1,1) Grid2D
+                energy_component (1,1) EnergyComponent
             end
             obj.name = name;
             obj.grid = grid;
+            obj.energy_component = energy_component;
         end
 
         function add_boundary_face(obj, direction, face_index, orientation, heat_transfer_coefficient, environment_temperature)
@@ -68,25 +67,12 @@ classdef NonUniformConvectiveBoundary < IBoundaryType
                     obj.lin_ind_x_p2(new_ind) = lin_ind + prod(sz);
                     obj.lin_ind_x_p3(new_ind) = lin_ind + 2 * prod(sz);
 
-                    % Boundary value coefficients
-                    obj.bd_val_x_p1(new_ind) = 0;
-                    obj.bd_val_x_p2(new_ind) = 0;
-                    obj.bd_val_x_p3(new_ind) = environment_temperature;
-
-                    % Boundary normal derivative coefficients
-                    dx = obj.grid.dx(:,1);
-                    i = face_index(1);
-                    if orientation == 1
-                        dx_inv = 2 / dx(i);
-                        obj.bd_der_x_p1(new_ind) = 0;
-                        obj.bd_der_x_p2(new_ind) = dx_inv;
-                        obj.bd_der_x_p3(new_ind) = -dx_inv * environment_temperature;
-                    else
-                        dx_inv = -2 / dx(i-1);
-                        obj.bd_der_x_p1(new_ind) = dx_inv;
-                        obj.bd_der_x_p2(new_ind) = 0;
-                        obj.bd_der_x_p3(new_ind) = -dx_inv * environment_temperature;
-                    end
+                    % Coefficients
+                    obj.heat_trans_coeff_x(new_ind) = heat_transfer_coefficient;
+                    obj.environment_temp_x(new_ind) = environment_temperature;
+                    obj.dx_inv_times_2(new_ind) = 2 / obj.grid.dx(face_index(1) + (orientation - 1) / 2);
+                    obj.orientation_x(new_ind) = orientation;
+                    obj.cell_ind_x(new_ind) = sub2ind(obj.grid.sz, face_index(1) + (orientation - 1) / 2, face_index(2));
                 case "r"
                     if (1 > face_index(1) || face_index(1) > obj.grid.sz(1)) || (1 > face_index(2) || face_index(2) > obj.grid.sz(2)+1)
                         error("Provided face index is out of bounds");
@@ -100,60 +86,60 @@ classdef NonUniformConvectiveBoundary < IBoundaryType
                     obj.lin_ind_r_p2(new_ind) = lin_ind + prod(sz);
                     obj.lin_ind_r_p3(new_ind) = lin_ind + 2 * prod(sz);
 
-                    % Boundary value coefficients
-                    obj.bd_val_r_p1(new_ind) = 0;
-                    obj.bd_val_r_p2(new_ind) = 0;
-                    obj.bd_val_r_p3(new_ind) = environment_temperature;
-
-                    % Boundary normal derivative coefficients
-                    dr = obj.grid.dr(1,:);
-                    j = face_index(2);
-                    if orientation == 1
-                        dr_inv = 2 / dr(j);
-                        obj.bd_der_r_p1(new_ind) = 0;
-                        obj.bd_der_r_p2(new_ind) = dr_inv;
-                        obj.bd_der_r_p3(new_ind) = -dr_inv * environment_temperature;
-                    else
-                        dr_inv = -2 / dr(j-1);
-                        obj.bd_der_r_p1(new_ind) = dr_inv;
-                        obj.bd_der_r_p2(new_ind) = 0;
-                        obj.bd_der_r_p3(new_ind) = -dr_inv * environment_temperature;
-                    end
+                    % Coefficients
+                    obj.heat_trans_coeff_r(new_ind) = heat_transfer_coefficient;
+                    obj.environment_temp_r(new_ind) = environment_temperature;
+                    obj.dr_inv_times_2(new_ind) = 2 / obj.grid.dr(face_index(2) + (orientation - 1) / 2);
+                    obj.orientation_r(new_ind) = orientation;
+                    obj.cell_ind_r(new_ind) = sub2ind(obj.grid.sz, face_index(1), face_index(2) + (orientation - 1) / 2);
                 otherwise
                     error("Provided direction has to be a name of one of the directions, either 'x' or 'r'");
             end
         end
         
         function [coeffs_x, coeffs_r] = apply_boundary_condition_value(obj, coeffs_x, coeffs_r)
+            % Heat conductivity at boundary (using assumption that its normal derivative at boundary is 0)
+            k_x = obj.energy_component.k(obj.cell_ind_x);
+            k_r = obj.energy_component.k(obj.cell_ind_r);
+
+            % 1 / (h + k * 2 / dx)
+            temp_coeff_x = 1 ./ (obj.heat_trans_coeff_x + k_x .* obj.dx_inv_times_2);
+            temp_coeff_r = 1 ./ (obj.heat_trans_coeff_r + k_r .* obj.dr_inv_times_2);
+
             % X faces
-            coeffs_x(obj.lin_ind_x_p1) = obj.bd_val_x_p1;
-            coeffs_x(obj.lin_ind_x_p2) = obj.bd_val_x_p2;
-            coeffs_x(obj.lin_ind_x_p3) = obj.bd_val_x_p3;
+            coeffs_x(obj.lin_ind_x_p1) = k_x .* obj.dx_inv_times_2 .* temp_coeff_x .* ((1 - obj.orientation_x) * 0.5);
+            coeffs_x(obj.lin_ind_x_p2) = k_x .* obj.dx_inv_times_2 .* temp_coeff_x .* ((1 + obj.orientation_x) * 0.5);
+            coeffs_x(obj.lin_ind_x_p3) = obj.heat_trans_coeff_x .* obj.environment_temp_x .* temp_coeff_x;
 
             % R faces
-            coeffs_r(obj.lin_ind_r_p1) = obj.bd_val_r_p1;
-            coeffs_r(obj.lin_ind_r_p2) = obj.bd_val_r_p2;
-            coeffs_r(obj.lin_ind_r_p3) = obj.bd_val_r_p3;
+            coeffs_r(obj.lin_ind_r_p1) = k_r .* obj.dr_inv_times_2 .* temp_coeff_r .* ((1 - obj.orientation_r) * 0.5);
+            coeffs_r(obj.lin_ind_r_p2) = k_r .* obj.dr_inv_times_2 .* temp_coeff_r .* ((1 + obj.orientation_r) * 0.5);
+            coeffs_r(obj.lin_ind_r_p3) = obj.heat_trans_coeff_r .* obj.environment_temp_r .* temp_coeff_r;
         end
 
         function [coeffs_x, coeffs_r] = apply_boundary_condition_normal_derivative(obj, coeffs_x, coeffs_r)
-            % X faces
-            coeffs_x(obj.lin_ind_x_p1) = obj.bd_der_x_p1;
-            coeffs_x(obj.lin_ind_x_p2) = obj.bd_der_x_p2;
-            coeffs_x(obj.lin_ind_x_p3) = obj.bd_der_x_p3;
+            % Heat conductivity at boundary (using assumption that its normal derivative at boundary is 0)
+            k_x = obj.energy_component.k(obj.cell_ind_x);
+            k_r = obj.energy_component.k(obj.cell_ind_r);
+
+            % orientation * h * 2 / dx / (h + k * 2 / dx)
+            temp_coeff_x = obj.orientation_x .* obj.heat_trans_coeff_x .* obj.dx_inv_times_2 ./ (obj.heat_trans_coeff_x + k_x .* obj.dx_inv_times_2);
+            temp_coeff_r = obj.orientation_r .* obj.heat_trans_coeff_r .* obj.dr_inv_times_2 ./ (obj.heat_trans_coeff_r + k_r .* obj.dr_inv_times_2);
+
+            % X face
+            coeffs_x(obj.lin_ind_x_p1) = temp_coeff_x .* ((1 - obj.orientation_x) * 0.5);
+            coeffs_x(obj.lin_ind_x_p2) = temp_coeff_x .* ((1 + obj.orientation_x) * 0.5);
+            coeffs_x(obj.lin_ind_x_p3) = -temp_coeff_x .* obj.environment_temp_x;
 
             % R faces
-            coeffs_r(obj.lin_ind_r_p1) = obj.bd_der_r_p1;
-            coeffs_r(obj.lin_ind_r_p2) = obj.bd_der_r_p2;
-            coeffs_r(obj.lin_ind_r_p3) = obj.bd_der_r_p3;
+            coeffs_r(obj.lin_ind_r_p1) = temp_coeff_r .* ((1 - obj.orientation_r) * 0.5);
+            coeffs_r(obj.lin_ind_r_p2) = temp_coeff_r .* ((1 + obj.orientation_r) * 0.5);
+            coeffs_r(obj.lin_ind_r_p3) = -temp_coeff_r .* obj.environment_temp_r;
         end
     
         function converted_bd = convert_into_correction_boundary(obj)
+            % NOT YET IMPLEMENTED
             converted_bd = obj.copy();
-            converted_bd.bd_val_x_p3(:) = 0;
-            converted_bd.bd_val_r_p3(:) = 0;
-            converted_bd.bd_der_x_p3(:) = 0;
-            converted_bd.bd_der_r_p3(:) = 0;
         end
     end
 end
